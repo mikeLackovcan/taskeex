@@ -35,7 +35,8 @@ const UNDO_MS = 6000
 function loadTasks(): Task[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
-    return raw ? (JSON.parse(raw) as Task[]) : []
+    // The first visit starts with one bubble that teaches the main move.
+    return raw ? (JSON.parse(raw) as Task[]) : [{ id: 'welcome', title: 'Drag me onto a day', duration: DEFAULT_DURATION }]
   } catch {
     return []
   }
@@ -56,10 +57,25 @@ const collision: CollisionDetection = (args) => {
 
 type Undo = { message: string; previous: Task[] }
 
+const PHONE = '(max-width: 760px)'
+
+function useIsPhone() {
+  const [phone, setPhone] = useState(() => window.matchMedia(PHONE).matches)
+  useEffect(() => {
+    const mq = window.matchMedia(PHONE)
+    const onChange = () => setPhone(mq.matches)
+    mq.addEventListener('change', onChange)
+    return () => mq.removeEventListener('change', onChange)
+  }, [])
+  return phone
+}
+
 export default function App() {
   const [tasks, setTasks] = useState<Task[]>(loadTasks)
   const [weekOffset, setWeekOffset] = useState(0)
   const [draggingId, setDraggingId] = useState<string | null>(null)
+  const [overId, setOverId] = useState<string | null>(null)
+  const isPhone = useIsPhone()
   const [editingId, setEditingId] = useState<string | null>(null)
   const [undo, setUndo] = useState<Undo | null>(null)
   const undoTimer = useRef<number | undefined>(undefined)
@@ -81,12 +97,19 @@ export default function App() {
 
   const today = new Date()
   const todayKey = dayKey(today)
-  const monday = addDays(weekStart(today), weekOffset * 7)
-  const days = useMemo(() => Array.from({ length: 7 }, (_, i) => addDays(monday, i)), [monday.getTime()])
+  // A phone lists the next seven days from today, so there are no past days to scroll over.
+  const first = addDays(isPhone ? new Date(today.getFullYear(), today.getMonth(), today.getDate()) : weekStart(today), weekOffset * 7)
+  const days = useMemo(() => Array.from({ length: 7 }, (_, i) => addDays(first, i)), [first.getTime()])
 
   const loose = tasks.filter((t) => !t.day)
   const dragging = tasks.find((t) => t.id === draggingId)
   const editing = tasks.find((t) => t.id === editingId)
+
+  // Where the lifted bubble would land on the day under it.
+  const preview =
+    dragging && overId && overId !== TRAY && overId !== dragging.day
+      ? { day: overId, task: schedule(tasks, dragging.id, overId).find((t) => t.id === dragging.id)! }
+      : null
 
   /** Apply a change and offer to undo it for a few seconds. */
   function change(next: Task[], message: string) {
@@ -103,6 +126,7 @@ export default function App() {
 
   function onDragEnd(e: DragEndEvent) {
     setDraggingId(null)
+    setOverId(null)
     const id = String(e.active.id)
     const target = e.over ? String(e.over.id) : null
     const task = tasks.find((t) => t.id === id)
@@ -114,7 +138,7 @@ export default function App() {
     const next = schedule(tasks, id, target)
     const placed = next.find((t) => t.id === id)!
     const label = new Date(`${target}T00:00`).toLocaleDateString(undefined, { weekday: 'long' })
-    change(next, `“${task.title}” on ${label} at ${formatTime(placed.start!)}`)
+    change(next, `Moved to ${label} at ${formatTime(placed.start!)}`)
   }
 
   const range = `${days[0].toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} – ${days[6].toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`
@@ -127,8 +151,12 @@ export default function App() {
         setDraggingId(String(e.active.id))
         navigator.vibrate?.(8)
       }}
+      onDragOver={(e) => setOverId(e.over ? String(e.over.id) : null)}
       onDragEnd={onDragEnd}
-      onDragCancel={() => setDraggingId(null)}
+      onDragCancel={() => {
+        setDraggingId(null)
+        setOverId(null)
+      }}
     >
       <div className="app">
         <Tray tasks={loose} draggingId={draggingId} onAdd={addTask} onOpen={setEditingId} hasAny={tasks.length > 0} />
@@ -160,6 +188,7 @@ export default function App() {
                   isPast={key < todayKey}
                   tasks={tasks.filter((t) => t.day === key).sort((a, b) => a.start! - b.start!)}
                   draggingId={draggingId}
+                  preview={preview?.day === key ? preview.task : undefined}
                   onOpen={setEditingId}
                 />
               )
@@ -232,11 +261,16 @@ function Tray(props: {
         <input
           value={text}
           onChange={(e) => setText(e.target.value)}
-          placeholder="Add a task and press Enter"
+          placeholder="Add a task"
           aria-label="New task"
           enterKeyHint="done"
           autoComplete="off"
         />
+        {text.trim() && (
+          <button type="submit" className="add" aria-label="Add task">
+            +
+          </button>
+        )}
       </form>
       <div className="bubbles">
         {props.tasks.map((t) => (
@@ -259,9 +293,11 @@ function Day(props: {
   isPast: boolean
   tasks: Task[]
   draggingId: string | null
+  preview?: Task
   onOpen: (id: string) => void
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: props.id })
+  const rows = props.preview ? [...props.tasks, props.preview].sort((a, b) => a.start! - b.start!) : props.tasks
   const cls = ['day', isOver && 'over', props.isToday && 'today', props.isPast && 'past'].filter(Boolean).join(' ')
   return (
     <section ref={setNodeRef} className={cls}>
@@ -270,9 +306,16 @@ function Day(props: {
         <b>{props.date.getDate()}</b>
       </h3>
       <div className="day-tasks">
-        {props.tasks.map((t) => (
-          <Bubble key={t.id} task={t} hidden={t.id === props.draggingId} onOpen={props.onOpen} />
-        ))}
+        {rows.map((t) =>
+          t === props.preview ? (
+            <div key="preview" className="slot" style={{ '--len': t.duration } as React.CSSProperties}>
+              <time>{formatTime(t.start!)}</time>
+              <span>{t.title}</span>
+            </div>
+          ) : (
+            <Bubble key={t.id} task={t} hidden={t.id === props.draggingId} onOpen={props.onOpen} />
+          ),
+        )}
       </div>
     </section>
   )
@@ -296,7 +339,7 @@ function Bubble({ task, hidden, onOpen }: { task: Task; hidden: boolean; onOpen:
 
 function BubbleFace({ task, lifted }: { task: Task; lifted?: boolean }) {
   return (
-    <span className={`bubble${lifted ? ' lifted' : ''}`} style={{ '--h': hue(task.id) } as React.CSSProperties}>
+    <span className={`bubble${lifted ? ' lifted' : ''}`} style={{ '--h': hue(task.id), '--len': task.duration } as React.CSSProperties}>
       {task.start !== undefined && <time>{formatTime(task.start)}</time>}
       <span className="title">{task.title}</span>
       <small>{formatDuration(task.duration)}</small>
