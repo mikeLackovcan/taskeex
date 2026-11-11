@@ -94,12 +94,37 @@ export const resize = (tasks: Task[], id: string, duration: number) =>
     id,
   )
 
-/** Start a scheduled task at a chosen time. Tasks from that time on make room. */
-export const setStart = (tasks: Task[], id: string, start: number) =>
-  pushLater(
-    tasks.map((t) => (t.id === id && t.day ? { ...t, start } : { ...t })),
+const DAY_END = 24 * 60
+
+/**
+ * The start a task gets when it is put at `wanted` on a day: snapped to a quarter hour,
+ * kept inside the day, and moved past any task that is already running at that time.
+ */
+export function freeStartAt(tasks: Task[], id: string, day: string, wanted: number) {
+  const task = tasks.find((t) => t.id === id)
+  const duration = task?.duration ?? 0
+  let start = Math.min(Math.max(Math.round(wanted / STEP) * STEP, 0), DAY_END - duration)
+  const others = tasks.filter((t) => t.day === day && t.id !== id).sort((a, b) => a.start! - b.start!)
+  for (const o of others) {
+    if (o.start! < start && start < o.start! + o.duration) start = roundUp(o.start! + o.duration)
+  }
+  return start
+}
+
+/** Put a task on a day at a chosen time. Tasks from that time on make room. */
+export function placeAt(tasks: Task[], id: string, day: string, wanted: number) {
+  const start = freeStartAt(tasks, id, day, wanted)
+  return pushLater(
+    tasks.map((t) => (t.id === id ? { ...t, day, start } : { ...t })),
     id,
   )
+}
+
+/** Start a scheduled task at a chosen time on its own day. */
+export function setStart(tasks: Task[], id: string, start: number) {
+  const day = tasks.find((t) => t.id === id)?.day
+  return day ? placeAt(tasks, id, day, start) : tasks
+}
 
 /** Bring rolling tasks that were left undone on a past day forward to today. */
 export function rollOver(tasks: Task[], now = new Date()) {

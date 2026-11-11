@@ -1,54 +1,92 @@
+/* Layout: a tray of glossy bubbles beside a quiet time grid. The bubbles carry the colour; everything else stays calm. */
 :root {
-  --bg: #f6f5f1;
+  --bg: #eef3fb;
   --panel: #ffffff;
-  --ink: #1d1c1a;
-  --muted: #77736b;
-  --line: #e5e2da;
-  --accent: #3d5afe;
-  --accent-soft: #e6eaff;
-  --danger: #c0392b;
+  --ink: #14213d;
+  --muted: #66708a;
+  --line: #dde4f0;
+  --line-soft: #eef2f8;
+  --accent: #2563eb;
+  --accent-soft: #e2ecff;
   --on-accent: #ffffff;
-  --bubble-s: 80%;
-  --bubble-l: 90%;
-  --bubble-ink: #1d1c1a;
-  --shadow: 0 10px 30px rgba(20, 20, 40, 0.18);
+  --now: #f43f6e;
+  --danger: #c62f45;
+  --gloss: rgba(255, 255, 255, 0.6);
+  --shadow: 0 12px 32px rgba(20, 33, 61, 0.2);
+  --scrim: rgba(20, 33, 61, 0.35);
+  /* bubble colours */
+  --b0: #bfe0ff;
+  --b1: #c4f0d6;
+  --b2: #ffe7a3;
+  --b3: #ffd3bd;
+  --b4: #ffc8dc;
+  --b5: #dbd0ff;
+  --b6: #b8ecee;
+  --b7: #dcf0a4;
+  --bubble-ink: #14213d;
+
+  --display: 'Fredoka', ui-rounded, 'Segoe UI', system-ui, sans-serif;
+  --text: 'Figtree', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  /* height of one hour on the time grid; keep in step with HOUR_H in App.tsx */
+  --hour: 56px;
+  --gutter: 52px;
   color-scheme: light;
 }
 
 /* Dark follows the system, unless the host page pins a theme with data-theme. */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
-    --bg: #151514;
-    --panel: #1f1f1d;
-    --ink: #f1efe9;
-    --muted: #a09c93;
-    --line: #33322f;
-    --accent: #8c9eff;
-    --accent-soft: #262b4a;
-    --danger: #ff8a7a;
-    --on-accent: #14162e;
-    --bubble-s: 40%;
-    --bubble-l: 26%;
-    --bubble-ink: #f1efe9;
-    --shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+    --bg: #0e1526;
+    --panel: #162038;
+    --ink: #eef2fb;
+    --muted: #98a3bd;
+    --line: #26324f;
+    --line-soft: #1c2742;
+    --accent: #7aa7ff;
+    --accent-soft: #1d2c52;
+    --on-accent: #0e1526;
+    --now: #ff6b90;
+    --danger: #ff8fa0;
+    --gloss: rgba(255, 255, 255, 0.14);
+    --shadow: 0 12px 32px rgba(0, 0, 0, 0.55);
+    --scrim: rgba(0, 0, 0, 0.55);
+    --b0: #1f4f80;
+    --b1: #1d5a43;
+    --b2: #6a5413;
+    --b3: #7a4226;
+    --b4: #7b2e50;
+    --b5: #4a3990;
+    --b6: #176064;
+    --b7: #4b5f18;
+    --bubble-ink: #f3f6fd;
     color-scheme: dark;
   }
 }
 
 :root[data-theme='dark'] {
-  --bg: #151514;
-  --panel: #1f1f1d;
-  --ink: #f1efe9;
-  --muted: #a09c93;
-  --line: #33322f;
-  --accent: #8c9eff;
-  --accent-soft: #262b4a;
-  --danger: #ff8a7a;
-  --on-accent: #14162e;
-  --bubble-s: 40%;
-  --bubble-l: 26%;
-  --bubble-ink: #f1efe9;
-  --shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  --bg: #0e1526;
+  --panel: #162038;
+  --ink: #eef2fb;
+  --muted: #98a3bd;
+  --line: #26324f;
+  --line-soft: #1c2742;
+  --accent: #7aa7ff;
+  --accent-soft: #1d2c52;
+  --on-accent: #0e1526;
+  --now: #ff6b90;
+  --danger: #ff8fa0;
+  --gloss: rgba(255, 255, 255, 0.14);
+  --shadow: 0 12px 32px rgba(0, 0, 0, 0.55);
+  --scrim: rgba(0, 0, 0, 0.55);
+  --b0: #1f4f80;
+  --b1: #1d5a43;
+  --b2: #6a5413;
+  --b3: #7a4226;
+  --b4: #7b2e50;
+  --b5: #4a3990;
+  --b6: #176064;
+  --b7: #4b5f18;
+  --bubble-ink: #f3f6fd;
   color-scheme: dark;
 }
 
@@ -66,7 +104,7 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--ink);
-  font: 16px/1.4 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  font: 16px/1.4 var(--text);
   -webkit-tap-highlight-color: transparent;
 }
 
@@ -98,8 +136,7 @@ button {
 .tray {
   padding-block: 20px;
   padding-left: max(16px, env(safe-area-inset-left, 0px));
-  padding-right: max(16px, env(safe-area-inset-right, 0px));
-  border-right: 1px solid var(--line);
+  padding-right: 16px;
   overflow-y: auto;
   transition: background 0.15s;
 }
@@ -108,15 +145,53 @@ button {
   background: var(--accent-soft);
 }
 
+.wordmark {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 16px 4px;
+  font: 600 24px/1 var(--display);
+  letter-spacing: -0.01em;
+}
+
+/* a small bubble, the mark of the app */
+.wordmark i {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 32% 28%, var(--gloss) 0 22%, transparent 24%),
+    var(--accent);
+}
+
 .tray form {
   position: relative;
 }
 
+.tray input {
+  width: 100%;
+  padding: 12px 48px 12px 16px;
+  border: 1.5px solid var(--line);
+  border-radius: 999px;
+  background: var(--panel);
+  /* 16px keeps iOS from zooming in on focus */
+  font-size: 16px;
+}
+
+.tray input::placeholder {
+  color: var(--muted);
+}
+
+.tray input:focus {
+  outline: 0;
+  border-color: var(--accent);
+}
+
 .add {
   position: absolute;
-  top: 4px;
-  right: 4px;
-  bottom: 4px;
+  top: 5px;
+  right: 5px;
+  bottom: 5px;
   aspect-ratio: 1;
   border-radius: 999px;
   background: var(--accent);
@@ -124,22 +199,6 @@ button {
   font-size: 22px;
   line-height: 1;
   animation: pop 0.15s;
-}
-
-.tray input {
-  width: 100%;
-  padding: 12px 48px 12px 16px;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  background: var(--panel);
-  /* 16px keeps iOS from zooming in on focus */
-  font-size: 16px;
-}
-
-.tray input:focus {
-  outline: 2px solid var(--accent);
-  outline-offset: 0;
-  border-color: transparent;
 }
 
 .bubbles {
@@ -159,25 +218,21 @@ button {
   display: flex;
   flex-direction: column;
   min-width: 0;
+  min-height: 0;
   padding-block: 16px;
-  padding-left: max(16px, env(safe-area-inset-left, 0px));
   padding-right: max(16px, env(safe-area-inset-right, 0px));
-  overflow: hidden;
 }
 
 .week-bar {
   display: flex;
   align-items: center;
-  gap: 4px;
-  margin-bottom: 12px;
+  gap: 2px;
+  margin: 0 0 10px 8px;
 }
 
 .week-bar h2 {
-  margin: 0 6px;
-  font-size: 17px;
-  font-weight: 600;
-  min-width: 140px;
-  text-align: center;
+  margin: 0 10px 0 0;
+  font: 600 20px/1.2 var(--display);
 }
 
 .ghost {
@@ -188,84 +243,155 @@ button {
   font-size: 15px;
 }
 
-.week-bar .ghost:not(.today-btn) {
-  font-size: 24px;
-  line-height: 1;
-}
-
 .ghost:hover {
   background: var(--line);
 }
 
+.arrow {
+  font-size: 24px;
+  line-height: 1;
+}
+
 .today-btn {
-  margin-left: auto;
   color: var(--accent);
   font-weight: 600;
 }
 
-.days {
+/* ---------- the time grid ---------- */
+
+.grid-scroll {
   flex: 1;
-  display: grid;
-  grid-template-columns: repeat(7, minmax(0, 1fr));
-  gap: 8px;
   min-height: 0;
-}
-
-.day {
-  display: flex;
-  flex-direction: column;
-  padding: 8px;
-  border: 1.5px solid transparent;
-  border-radius: 16px;
-  background: var(--panel);
   overflow-y: auto;
-  transition:
-    background 0.15s,
-    border-color 0.15s,
-    transform 0.15s;
+  border-radius: 20px;
+  background: var(--panel);
 }
 
-.day.over {
-  border-color: var(--accent);
-  background: var(--accent-soft);
-  transform: scale(1.015);
+.heads,
+.grid {
+  display: grid;
+  grid-template-columns: var(--gutter) repeat(7, minmax(0, 1fr));
 }
 
-.day.past {
-  opacity: 0.55;
+.heads {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
 }
 
-.day h3 {
+/* a day's header is also a drop target: the task takes the next free slot */
+.head {
   display: flex;
-  align-items: baseline;
+  align-items: center;
+  justify-content: center;
   gap: 6px;
-  margin: 2px 4px 8px;
+  min-height: 52px;
+  padding: 0 4px;
+  border-radius: 12px;
+  color: var(--muted);
   font-size: 13px;
   font-weight: 500;
-  color: var(--muted);
+  transition: background 0.15s;
 }
 
-.day h3 b {
-  font-size: 17px;
-  color: var(--ink);
-}
-
-.day.today h3 b {
+.head b {
   display: inline-grid;
   place-items: center;
-  min-width: 28px;
-  height: 28px;
+  min-width: 30px;
+  height: 30px;
   padding: 0 6px;
   border-radius: 999px;
+  color: var(--ink);
+  font: 600 18px/1 var(--display);
+}
+
+.head.today b {
   background: var(--accent);
   color: var(--on-accent);
 }
 
-.day-tasks {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  flex: 1;
+.head.over {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.dot {
+  display: none;
+}
+
+.gutter {
+  position: relative;
+  height: calc(var(--hour) * 24);
+}
+
+.gutter span {
+  position: absolute;
+  right: 8px;
+  translate: 0 -50%;
+  color: var(--muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.col {
+  position: relative;
+  height: calc(var(--hour) * 24);
+  border-left: 1px solid var(--line);
+  /* a line on every hour and a fainter one on the half hour */
+  background-image:
+    linear-gradient(var(--line) 1px, transparent 1px), linear-gradient(var(--line-soft) 1px, transparent 1px);
+  background-size:
+    100% var(--hour),
+    100% var(--hour);
+  background-position:
+    0 -1px,
+    0 calc(var(--hour) / 2 - 1px);
+}
+
+.col.today {
+  background-color: color-mix(in srgb, var(--accent-soft) 45%, transparent);
+}
+
+.now {
+  position: absolute;
+  left: 0;
+  right: 0;
+  z-index: 3;
+  height: 2px;
+  translate: 0 -1px;
+  background: var(--now);
+  pointer-events: none;
+}
+
+.now::before {
+  content: '';
+  position: absolute;
+  left: -5px;
+  top: -4px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--now);
+}
+
+/* where the lifted bubble will land */
+.slot {
+  position: absolute;
+  left: 3px;
+  right: 3px;
+  z-index: 2;
+  min-height: 22px;
+  padding: 2px 8px;
+  border: 2px dashed var(--accent);
+  border-radius: 12px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
 }
 
 /* ---------- bubbles ---------- */
@@ -284,20 +410,52 @@ button {
   transition: opacity 0.15s;
 }
 
+.tray .bubble-btn {
+  animation: pop 0.2s cubic-bezier(0.2, 0.8, 0.2, 1.2);
+}
+
 .bubble {
   display: inline-flex;
   align-items: baseline;
   gap: 8px;
   max-width: 100%;
-  min-height: 40px;
-  padding: 9px 14px;
+  min-height: 42px;
+  padding: 10px 16px;
   border-radius: 999px;
-  background: hsl(var(--h) var(--bubble-s) var(--bubble-l));
+  /* the gloss: a soft highlight at the top left, like light on a bubble */
+  background:
+    radial-gradient(130% 100% at 18% -10%, var(--gloss), transparent 55%),
+    var(--c);
   color: var(--bubble-ink);
   transition: transform 0.12s;
 }
 
-.bubble-btn:hover .bubble {
+.c0 {
+  --c: var(--b0);
+}
+.c1 {
+  --c: var(--b1);
+}
+.c2 {
+  --c: var(--b2);
+}
+.c3 {
+  --c: var(--b3);
+}
+.c4 {
+  --c: var(--b4);
+}
+.c5 {
+  --c: var(--b5);
+}
+.c6 {
+  --c: var(--b6);
+}
+.c7 {
+  --c: var(--b7);
+}
+
+.tray .bubble-btn:hover .bubble {
   transform: translateY(-1px);
 }
 
@@ -305,81 +463,78 @@ button {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .bubble time,
 .bubble small {
   flex: none;
   font-size: 12px;
-  opacity: 0.7;
+  opacity: 0.72;
   font-variant-numeric: tabular-nums;
 }
 
 .bubble.lifted {
   box-shadow: var(--shadow);
-  transform: scale(1.06) rotate(-1.5deg);
   cursor: grabbing;
 }
 
-.day .bubble-btn,
-.day .bubble {
+.bubble.done {
+  opacity: 0.5;
+}
+
+.bubble.done .title {
+  text-decoration: line-through;
+}
+
+/* on the grid a bubble is a block: its top is its start, its height its length */
+.block {
+  position: absolute;
+  left: 3px;
+  right: 3px;
+  z-index: 1;
+  min-height: 22px;
+  border-radius: 12px;
+  container-type: size;
+}
+
+.block .bubble {
   display: flex;
   width: 100%;
-  border-radius: 14px;
+  height: calc(100% - 2px);
+  min-height: 0;
+  padding: 0 10px;
+  align-items: center;
+  border-radius: 12px;
+  overflow: hidden;
 }
 
-.day .bubble {
-  flex-wrap: wrap;
-  align-content: flex-start;
-  gap: 2px 6px;
-  padding: 8px 10px;
-  /* a longer task is a taller block, like on a calendar */
-  min-height: calc(30px + var(--len) * 0.45px);
+.block .bubble .title {
+  flex: 1;
+  min-width: 0;
+  font-size: 14px;
 }
 
-/* where the lifted bubble will land */
-.slot {
-  display: flex;
-  flex-wrap: wrap;
-  align-content: flex-start;
-  gap: 2px 6px;
-  min-height: calc(30px + var(--len) * 0.45px);
-  padding: 8px 10px;
-  border: 1.5px dashed var(--accent);
-  border-radius: 14px;
-  color: var(--accent);
-  font-weight: 500;
-  animation: pop 0.15s;
-}
-
-.slot span {
-  flex-basis: 100%;
-  order: -1;
-  overflow-wrap: anywhere;
-}
-
-.slot time {
-  font-size: 12px;
-  font-variant-numeric: tabular-nums;
-}
-
-.tray .bubble-btn {
-  animation: pop 0.2s cubic-bezier(0.2, 0.8, 0.2, 1.2);
-}
-
-@keyframes pop {
-  from {
-    opacity: 0;
-    scale: 0.85;
+/* a short block in a narrow column shows only its name; its place on the grid tells the time */
+@container (max-width: 220px) and (max-height: 43px) {
+  .block .bubble time {
+    display: none;
   }
 }
 
-.day .bubble .title {
-  flex-basis: 100%;
-  order: -1;
-  white-space: normal;
-  overflow-wrap: anywhere;
+/* a block with room stacks the name over the time */
+@container (min-height: 44px) {
+  .block .bubble {
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: flex-start;
+    gap: 0;
+    padding: 6px 10px;
+  }
+
+  .block .bubble .title {
+    flex: none;
+  }
 }
 
 /* ---------- task details ---------- */
@@ -391,14 +546,14 @@ button {
   display: grid;
   place-items: center;
   padding: 16px;
-  background: rgba(0, 0, 0, 0.3);
+  background: var(--scrim);
   animation: fade 0.15s;
 }
 
 .sheet {
   width: min(420px, 100%);
   padding: 20px;
-  border-radius: 20px;
+  border-radius: 24px;
   background: var(--panel);
   box-shadow: var(--shadow);
   animation: rise 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
@@ -408,6 +563,21 @@ button {
   display: flex;
   align-items: center;
   gap: 4px;
+}
+
+.sheet-title {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 0;
+  border: 0;
+  border-bottom: 1.5px solid var(--line);
+  background: none;
+  font: 600 22px/1.3 var(--display);
+}
+
+.sheet-title:focus {
+  outline: 0;
+  border-color: var(--accent);
 }
 
 .row {
@@ -428,7 +598,7 @@ button {
 .row input[type='time'] {
   min-height: 40px;
   padding: 0 12px;
-  border: 1px solid var(--line);
+  border: 1.5px solid var(--line);
   border-radius: 12px;
   background: var(--panel);
   font-size: 16px;
@@ -442,30 +612,6 @@ button {
   accent-color: var(--accent);
 }
 
-.bubble.done {
-  opacity: 0.5;
-}
-
-.bubble.done .title {
-  text-decoration: line-through;
-}
-
-.sheet-title {
-  flex: 1;
-  min-width: 0;
-  padding: 6px 0;
-  border: 0;
-  border-bottom: 1px solid var(--line);
-  background: none;
-  font-size: 20px;
-  font-weight: 600;
-}
-
-.sheet-title:focus {
-  outline: 0;
-  border-color: var(--accent);
-}
-
 .chips {
   display: flex;
   flex-wrap: wrap;
@@ -476,7 +622,7 @@ button {
 .chip {
   min-height: 40px;
   padding: 0 14px;
-  border: 1px solid var(--line);
+  border: 1.5px solid var(--line);
   border-radius: 999px;
 }
 
@@ -484,14 +630,15 @@ button {
   border-color: var(--accent);
   background: var(--accent);
   color: var(--on-accent);
+  font-weight: 600;
 }
 
 .sheet-actions {
-  margin-top: 16px;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 4px;
+  margin-top: 16px;
 }
 
 .danger {
@@ -505,7 +652,7 @@ button {
   border-radius: 999px;
   background: var(--accent);
   color: var(--on-accent);
-  font-weight: 600;
+  font-weight: 700;
 }
 
 /* ---------- undo ---------- */
@@ -520,7 +667,7 @@ button {
   align-items: center;
   gap: 12px;
   max-width: calc(100vw - 32px);
-  padding: 6px 6px 6px 16px;
+  padding: 6px 6px 6px 18px;
   border-radius: 999px;
   background: var(--ink);
   color: var(--bg);
@@ -542,7 +689,7 @@ button {
   border-radius: 999px;
   color: inherit;
   font-weight: 700;
-  background: rgba(127, 127, 127, 0.3);
+  background: color-mix(in srgb, var(--bg) 22%, transparent);
 }
 
 @keyframes fade {
@@ -558,7 +705,14 @@ button {
   }
 }
 
-/* ---------- phone: bubbles pinned on top, days in a list below ---------- */
+@keyframes pop {
+  from {
+    opacity: 0;
+    scale: 0.85;
+  }
+}
+
+/* ---------- phone: bubbles and a strip of days pinned on top, one day's time grid below ---------- */
 
 @media (max-width: 760px) {
   html,
@@ -574,69 +728,85 @@ button {
   .tray {
     position: sticky;
     top: env(safe-area-inset-top, 0px);
-    z-index: 2;
-    padding-block: 12px;
-    border-right: 0;
+    z-index: 6;
+    padding-block: 10px 8px;
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
     border-bottom: 1px solid var(--line);
     background: var(--bg);
+    overflow: visible;
+  }
+
+  .wordmark {
+    display: none;
   }
 
   .bubbles {
     margin-top: 10px;
-    max-height: 148px;
+    max-height: 100px;
     overflow-y: auto;
   }
 
-  .calendar {
-    padding-block: 8px 96px;
-    overflow: visible;
-  }
-
-  .days {
+  /* the strip of days: tap one to see it, or drop a bubble on it */
+  .heads {
+    position: static;
     display: flex;
-    flex-direction: column;
+    gap: 4px;
+    margin: 10px -4px 0;
+    padding: 0 4px 2px;
+    border: 0;
+    background: none;
+    overflow-x: auto;
+    scrollbar-width: none;
   }
 
-  /* each day is one compact row: date on the left, tasks beside it */
-  .day {
-    flex-direction: row;
-    align-items: flex-start;
-    gap: 8px;
-    min-height: 60px;
+  .heads::-webkit-scrollbar {
+    display: none;
+  }
+
+  .head {
+    flex: none;
+    flex-direction: column;
+    gap: 0;
+    width: 46px;
+    min-height: 58px;
+    padding: 4px 0;
+    border-radius: 16px;
+    font-size: 12px;
+  }
+
+  .head.selected {
+    background: var(--panel);
+    box-shadow: inset 0 0 0 1.5px var(--accent);
+    color: var(--accent);
+  }
+
+  .dot {
+    display: block;
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    margin-top: 3px;
+  }
+
+  .dot.on {
+    background: var(--accent);
+  }
+
+  .calendar {
+    padding-block: 12px 96px;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+  }
+
+  .grid-scroll {
     overflow: visible;
   }
 
-  .day.over {
-    transform: none;
+  .grid {
+    grid-template-columns: var(--gutter) minmax(0, 1fr);
   }
 
-  .day h3 {
-    flex: none;
-    width: 62px;
-    margin: 10px 0 0 4px;
-  }
-
-  .day-tasks {
-    min-width: 0;
-  }
-
-  .day .bubble,
-  .slot {
-    flex-wrap: nowrap;
-    align-items: baseline;
-    min-height: 44px;
-    padding: 11px 12px;
-  }
-
-  .day .bubble .title,
-  .slot span {
-    flex: 1;
-    order: 0;
-    flex-basis: auto;
-  }
-
-  .slot time {
-    width: auto;
+  .block .bubble .title {
+    font-size: 15px;
   }
 
   /* details slide up from the bottom, within reach of a thumb */

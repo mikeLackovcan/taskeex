@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { nextFreeSlot, resize, rollOver, schedule, setStart, unschedule, weekStart, dayKey, type Task } from './schedule'
+import { freeStartAt, nextFreeSlot, placeAt, resize, rollOver, schedule, setStart, unschedule, weekStart, dayKey, type Task } from './schedule'
 
 const t = (id: string, start: number, duration: number): Task => ({ id, title: id, duration, day: '2026-11-12', start })
 
@@ -80,5 +80,24 @@ describe('rollOver', () => {
       { ...t('c', 600, 30), rolling: true, day: '2026-11-20' },
     ]
     expect(rollOver(tasks, now)).toEqual(tasks)
+  })
+})
+
+describe('placeAt', () => {
+  it('snaps to the nearest quarter hour', () => {
+    expect(freeStartAt([{ id: 'x', title: 'x', duration: 30 }], 'x', '2026-11-12', 547)).toBe(540)
+    expect(freeStartAt([{ id: 'x', title: 'x', duration: 30 }], 'x', '2026-11-12', 553)).toBe(555)
+  })
+  it('moves past a task that is running at that time', () => {
+    const out = placeAt([t('a', 540, 60), { id: 'x', title: 'x', duration: 30 }], 'x', '2026-11-12', 570)
+    expect(out[1]).toMatchObject({ day: '2026-11-12', start: 600 })
+  })
+  it('pushes a task that starts inside the new one', () => {
+    const out = placeAt([t('a', 600, 30), { id: 'x', title: 'x', duration: 60 }], 'x', '2026-11-12', 570)
+    expect(out.map((x) => x.start)).toEqual([630, 570])
+  })
+  it('stays inside the day', () => {
+    expect(freeStartAt([{ id: 'x', title: 'x', duration: 60 }], 'x', '2026-11-12', 1500)).toBe(1380)
+    expect(freeStartAt([{ id: 'x', title: 'x', duration: 60 }], 'x', '2026-11-12', -40)).toBe(0)
   })
 })
