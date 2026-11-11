@@ -1,0 +1,504 @@
+:root {
+  --bg: #f6f5f1;
+  --panel: #ffffff;
+  --ink: #1d1c1a;
+  --muted: #77736b;
+  --line: #e5e2da;
+  --accent: #3d5afe;
+  --accent-soft: #e6eaff;
+  --danger: #c0392b;
+  --bubble-s: 80%;
+  --bubble-l: 90%;
+  --bubble-ink: #1d1c1a;
+  --shadow: 0 10px 30px rgba(20, 20, 40, 0.18);
+  color-scheme: light;
+}
+
+/* Dark follows the system, unless the host page pins a theme with data-theme. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --bg: #151514;
+    --panel: #1f1f1d;
+    --ink: #f1efe9;
+    --muted: #a09c93;
+    --line: #33322f;
+    --accent: #8c9eff;
+    --accent-soft: #262b4a;
+    --danger: #ff8a7a;
+    --bubble-s: 40%;
+    --bubble-l: 26%;
+    --bubble-ink: #f1efe9;
+    --shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme='dark'] {
+  --bg: #151514;
+  --panel: #1f1f1d;
+  --ink: #f1efe9;
+  --muted: #a09c93;
+  --line: #33322f;
+  --accent: #8c9eff;
+  --accent-soft: #262b4a;
+  --danger: #ff8a7a;
+  --bubble-s: 40%;
+  --bubble-l: 26%;
+  --bubble-ink: #f1efe9;
+  --shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font: 16px/1.4 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  -webkit-tap-highlight-color: transparent;
+}
+
+button,
+input {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+  border: 0;
+  background: none;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* ---------- layout: tray beside the week on wide screens ---------- */
+
+.app {
+  display: grid;
+  grid-template-columns: 300px 1fr;
+  height: 100%;
+}
+
+.tray {
+  padding-block: 20px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  border-right: 1px solid var(--line);
+  overflow-y: auto;
+  transition: background 0.15s;
+}
+
+.tray.over {
+  background: var(--accent-soft);
+}
+
+.tray input {
+  width: 100%;
+  padding: 12px 16px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--panel);
+  /* 16px keeps iOS from zooming in on focus */
+  font-size: 16px;
+}
+
+.tray input:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 0;
+  border-color: transparent;
+}
+
+.bubbles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.hint {
+  margin: 4px 6px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.calendar {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding-block: 16px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  overflow: hidden;
+}
+
+.week-bar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 12px;
+}
+
+.week-bar h2 {
+  margin: 0 6px;
+  font-size: 17px;
+  font-weight: 600;
+  min-width: 140px;
+  text-align: center;
+}
+
+.ghost {
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 12px;
+  border-radius: 12px;
+  font-size: 15px;
+}
+
+.week-bar .ghost:not(.today-btn) {
+  font-size: 24px;
+  line-height: 1;
+}
+
+.ghost:hover {
+  background: var(--line);
+}
+
+.today-btn {
+  margin-left: auto;
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.days {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 8px;
+  min-height: 0;
+}
+
+.day {
+  display: flex;
+  flex-direction: column;
+  padding: 8px;
+  border: 1.5px solid transparent;
+  border-radius: 16px;
+  background: var(--panel);
+  overflow-y: auto;
+  transition:
+    background 0.15s,
+    border-color 0.15s,
+    transform 0.15s;
+}
+
+.day.over {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  transform: scale(1.015);
+}
+
+.day.past {
+  opacity: 0.55;
+}
+
+.day h3 {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin: 2px 4px 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--muted);
+}
+
+.day h3 b {
+  font-size: 17px;
+  color: var(--ink);
+}
+
+.day.today h3 b {
+  display: inline-grid;
+  place-items: center;
+  min-width: 28px;
+  height: 28px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+}
+
+.day-tasks {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+}
+
+/* ---------- bubbles ---------- */
+
+.bubble-btn {
+  padding: 0;
+  max-width: 100%;
+  border-radius: 999px;
+  text-align: left;
+  cursor: grab;
+  /* let a swipe scroll, while a short press lifts the bubble */
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  transition: opacity 0.15s;
+}
+
+.bubble {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  max-width: 100%;
+  min-height: 40px;
+  padding: 9px 14px;
+  border-radius: 999px;
+  background: hsl(var(--h) var(--bubble-s) var(--bubble-l));
+  color: var(--bubble-ink);
+  transition: transform 0.12s;
+}
+
+.bubble-btn:hover .bubble {
+  transform: translateY(-1px);
+}
+
+.bubble .title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+}
+
+.bubble time,
+.bubble small {
+  flex: none;
+  font-size: 12px;
+  opacity: 0.7;
+  font-variant-numeric: tabular-nums;
+}
+
+.bubble.lifted {
+  box-shadow: var(--shadow);
+  transform: scale(1.06) rotate(-1.5deg);
+  cursor: grabbing;
+}
+
+.day .bubble-btn,
+.day .bubble {
+  display: flex;
+  width: 100%;
+  border-radius: 14px;
+}
+
+.day .bubble {
+  flex-wrap: wrap;
+  gap: 2px 6px;
+  padding: 8px 10px;
+}
+
+.day .bubble .title {
+  flex-basis: 100%;
+  order: -1;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+/* ---------- task details ---------- */
+
+.sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.3);
+  animation: fade 0.15s;
+}
+
+.sheet {
+  width: min(420px, 100%);
+  padding: 20px;
+  border-radius: 20px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+  animation: rise 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.sheet-title {
+  width: 100%;
+  padding: 6px 0;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  background: none;
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.sheet-title:focus {
+  outline: 0;
+  border-color: var(--accent);
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 16px 0 20px;
+}
+
+.chip {
+  min-height: 40px;
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+}
+
+.chip.on {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+}
+
+.sheet-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+
+.danger {
+  color: var(--danger);
+}
+
+.primary {
+  margin-left: auto;
+  min-height: 44px;
+  padding: 0 20px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  font-weight: 600;
+}
+
+/* ---------- undo ---------- */
+
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: calc(100vw - 32px);
+  padding: 6px 6px 6px 16px;
+  border-radius: 999px;
+  background: var(--ink);
+  color: var(--bg);
+  font-size: 14px;
+  box-shadow: var(--shadow);
+  animation: rise 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.toast span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.toast button {
+  flex: none;
+  min-height: 36px;
+  padding: 0 14px;
+  border-radius: 999px;
+  color: inherit;
+  font-weight: 700;
+  background: rgba(127, 127, 127, 0.3);
+}
+
+@keyframes fade {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    translate: 0 12px;
+  }
+}
+
+/* ---------- phone: bubbles pinned on top, days in a list below ---------- */
+
+@media (max-width: 760px) {
+  html,
+  body,
+  #root {
+    height: auto;
+  }
+
+  .app {
+    display: block;
+  }
+
+  .tray {
+    position: sticky;
+    top: env(safe-area-inset-top, 0px);
+    z-index: 2;
+    padding-block: 12px;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+    background: var(--bg);
+  }
+
+  .bubbles {
+    margin-top: 10px;
+    max-height: 104px;
+    overflow-y: auto;
+  }
+
+  .calendar {
+    padding-block: 8px 96px;
+    overflow: visible;
+  }
+
+  .days {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .day {
+    min-height: 76px;
+    overflow: visible;
+  }
+
+  .day h3 {
+    margin-bottom: 6px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation: none !important;
+    transition: none !important;
+  }
+}
