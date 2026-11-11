@@ -20,7 +20,9 @@ import {
   formatDuration,
   formatTime,
   resize,
+  rollOver,
   schedule,
+  setStart,
   unschedule,
   weekStart,
   type Task,
@@ -88,6 +90,18 @@ export default function App() {
     }
   }, [tasks])
 
+  // Rolling tasks left undone come forward when the app opens and when the day changes.
+  useEffect(() => {
+    const roll = () => setTasks((ts) => rollOver(ts))
+    roll()
+    const timer = window.setInterval(roll, 60_000)
+    document.addEventListener('visibilitychange', roll)
+    return () => {
+      window.clearInterval(timer)
+      document.removeEventListener('visibilitychange', roll)
+    }
+  }, [])
+
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 4 } }),
     // A short press lifts the bubble, so a swipe still scrolls the page.
@@ -101,7 +115,7 @@ export default function App() {
   const first = addDays(isPhone ? new Date(today.getFullYear(), today.getMonth(), today.getDate()) : weekStart(today), weekOffset * 7)
   const days = useMemo(() => Array.from({ length: 7 }, (_, i) => addDays(first, i)), [first.getTime()])
 
-  const loose = tasks.filter((t) => !t.day)
+  const loose = tasks.filter((t) => !t.day).sort((a, b) => Number(!!a.done) - Number(!!b.done))
   const dragging = tasks.find((t) => t.id === draggingId)
   const editing = tasks.find((t) => t.id === editingId)
 
@@ -207,6 +221,16 @@ export default function App() {
           onClose={() => setEditingId(null)}
           onRename={(title) => setTasks((ts) => ts.map((t) => (t.id === editing.id ? { ...t, title } : t)))}
           onDuration={(d) => setTasks((ts) => resize(ts, editing.id, d))}
+          onStart={(start) => setTasks((ts) => setStart(ts, editing.id, start))}
+          onRolling={(rolling) => setTasks((ts) => ts.map((t) => (t.id === editing.id ? { ...t, rolling } : t)))}
+          onDone={() => {
+            const done = !editing.done
+            change(
+              tasks.map((t) => (t.id === editing.id ? { ...t, done } : t)),
+              done ? `Done: ${editing.title}` : `Not done: ${editing.title}`,
+            )
+            setEditingId(null)
+          }}
           onUnschedule={() => {
             change(unschedule(tasks, editing.id), `“${editing.title}” is a bubble again`)
             setEditingId(null)
@@ -339,9 +363,12 @@ function Bubble({ task, hidden, onOpen }: { task: Task; hidden: boolean; onOpen:
 
 function BubbleFace({ task, lifted }: { task: Task; lifted?: boolean }) {
   return (
-    <span className={`bubble${lifted ? ' lifted' : ''}`} style={{ '--h': hue(task.id), '--len': task.duration } as React.CSSProperties}>
+    <span className={`bubble${lifted ? ' lifted' : ''}${task.done ? ' done' : ''}`} style={{ '--h': hue(task.id), '--len': task.duration } as React.CSSProperties}>
       {task.start !== undefined && <time>{formatTime(task.start)}</time>}
-      <span className="title">{task.title}</span>
+      <span className="title">
+        {task.done && <span aria-label="Done">✓ </span>}
+        {task.title}
+      </span>
       <small>{formatDuration(task.duration)}</small>
     </span>
   )
@@ -352,6 +379,9 @@ function Editor(props: {
   onClose: () => void
   onRename: (title: string) => void
   onDuration: (minutes: number) => void
+  onStart: (minutes: number) => void
+  onRolling: (rolling: boolean) => void
+  onDone: () => void
   onUnschedule: () => void
   onDelete: () => void
 }) {
@@ -364,13 +394,32 @@ function Editor(props: {
   return (
     <div className="sheet-backdrop" onClick={props.onClose}>
       <div className="sheet" role="dialog" aria-label="Task details" onClick={(e) => e.stopPropagation()}>
-        <input
-          className="sheet-title"
-          value={task.title}
-          aria-label="Task name"
-          onChange={(e) => props.onRename(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && props.onClose()}
-        />
+        <div className="sheet-head">
+          <input
+            className="sheet-title"
+            value={task.title}
+            aria-label="Task name"
+            onChange={(e) => props.onRename(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && props.onClose()}
+          />
+          <button className="ghost" aria-label="Close" onClick={props.onClose}>
+            ✕
+          </button>
+        </div>
+        {task.day && (
+          <label className="row">
+            <span>Starts at</span>
+            <input
+              type="time"
+              step={900}
+              value={`${String(Math.floor(task.start! / 60)).padStart(2, '0')}:${String(task.start! % 60).padStart(2, '0')}`}
+              onChange={(e) => {
+                const [h, m] = e.target.value.split(':').map(Number)
+                if (!Number.isNaN(h) && !Number.isNaN(m)) props.onStart(h * 60 + m)
+              }}
+            />
+          </label>
+        )}
         <div className="chips" role="group" aria-label="Duration">
           {DURATIONS.map((d) => (
             <button key={d} className={d === task.duration ? 'chip on' : 'chip'} onClick={() => props.onDuration(d)}>
@@ -378,6 +427,13 @@ function Editor(props: {
             </button>
           ))}
         </div>
+        <label className="row">
+          <span>
+            Rolling
+            <small>Moves to today until it is done</small>
+          </span>
+          <input type="checkbox" checked={!!task.rolling} onChange={(e) => props.onRolling(e.target.checked)} />
+        </label>
         <div className="sheet-actions">
           {task.day && (
             <button className="ghost" onClick={props.onUnschedule}>
@@ -387,8 +443,8 @@ function Editor(props: {
           <button className="ghost danger" onClick={props.onDelete}>
             Delete
           </button>
-          <button className="primary" onClick={props.onClose}>
-            Done
+          <button className="primary" onClick={props.onDone}>
+            {task.done ? 'Mark not done' : 'Mark done'}
           </button>
         </div>
       </div>

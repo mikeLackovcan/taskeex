@@ -7,6 +7,9 @@ export type Task = {
   day?: string
   /** Start time in minutes after midnight. */
   start?: number
+  done?: boolean
+  /** A rolling task moves to today for as long as it is not done. */
+  rolling?: boolean
 }
 
 /** Start of the usual hours, in minutes after midnight. */
@@ -63,18 +66,44 @@ export function schedule(tasks: Task[], id: string, day: string, now = new Date(
 }
 
 export const unschedule = (tasks: Task[], id: string) =>
-  tasks.map((t) => (t.id === id ? { id: t.id, title: t.title, duration: t.duration } : t))
+  tasks.map((t) => {
+    if (t.id !== id) return t
+    const { day: _day, start: _start, ...loose } = t
+    return loose
+  })
 
-/** Change a task's length. On the calendar it keeps its start and pushes later tasks down if needed. */
-export function resize(tasks: Task[], id: string, duration: number) {
-  const next = tasks.map((t) => (t.id === id ? { ...t, duration } : t))
-  const task = next.find((t) => t.id === id)
-  if (!task?.day) return next
-  const day = next.filter((t) => t.day === task.day).sort((a, b) => a.start! - b.start!)
-  let end = 0
-  for (const t of day) {
-    if (t.start! < end && t.id !== id) t.start = roundUp(end)
+/** Keep task `id` where it is and push the tasks after it down until nothing overlaps it. */
+function pushLater(tasks: Task[], id: string) {
+  const task = tasks.find((t) => t.id === id)
+  if (!task?.day) return tasks
+  const later = tasks
+    .filter((t) => t.day === task.day && t.id !== id && t.start! >= task.start!)
+    .sort((a, b) => a.start! - b.start!)
+  let end = task.start! + task.duration
+  for (const t of later) {
+    if (t.start! < end) t.start = roundUp(end)
     end = Math.max(end, t.start! + t.duration)
   }
-  return next
+  return tasks
+}
+
+/** Change a task's length. On the calendar it keeps its start and pushes later tasks down if needed. */
+export const resize = (tasks: Task[], id: string, duration: number) =>
+  pushLater(
+    tasks.map((t) => (t.id === id ? { ...t, duration } : { ...t })),
+    id,
+  )
+
+/** Start a scheduled task at a chosen time. Tasks from that time on make room. */
+export const setStart = (tasks: Task[], id: string, start: number) =>
+  pushLater(
+    tasks.map((t) => (t.id === id && t.day ? { ...t, start } : { ...t })),
+    id,
+  )
+
+/** Bring rolling tasks that were left undone on a past day forward to today. */
+export function rollOver(tasks: Task[], now = new Date()) {
+  const today = dayKey(now)
+  const late = tasks.filter((t) => t.rolling && !t.done && t.day && t.day < today)
+  return late.reduce((ts, t) => schedule(ts, t.id, today, now), tasks)
 }

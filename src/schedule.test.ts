@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { nextFreeSlot, resize, schedule, unschedule, weekStart, dayKey, type Task } from './schedule'
+import { nextFreeSlot, resize, rollOver, schedule, setStart, unschedule, weekStart, dayKey, type Task } from './schedule'
 
 const t = (id: string, start: number, duration: number): Task => ({ id, title: id, duration, day: '2026-11-12', start })
 
@@ -53,5 +53,32 @@ describe('resize', () => {
   })
   it('only changes the length of a loose bubble', () => {
     expect(resize([{ id: 'x', title: 'x', duration: 30 }], 'x', 60)[0]).toEqual({ id: 'x', title: 'x', duration: 60 })
+  })
+})
+
+describe('setStart', () => {
+  it('moves the task and pushes the ones from that time on', () => {
+    const out = setStart([t('a', 540, 30), t('b', 600, 30), t('c', 630, 30)], 'a', 600)
+    expect(out.map((x) => x.start)).toEqual([600, 630, 660])
+  })
+  it('leaves earlier tasks alone', () => {
+    const out = setStart([t('a', 540, 30), t('b', 600, 30)], 'b', 720)
+    expect(out.map((x) => x.start)).toEqual([540, 720])
+  })
+})
+
+describe('rollOver', () => {
+  const now = new Date(2026, 10, 14, 8, 0)
+  it('moves an undone rolling task from a past day to today', () => {
+    const out = rollOver([{ ...t('a', 600, 30), rolling: true }], now)
+    expect(out[0]).toMatchObject({ day: '2026-11-14', start: 540 })
+  })
+  it('leaves done, plain and future tasks where they are', () => {
+    const tasks = [
+      { ...t('a', 600, 30), rolling: true, done: true },
+      t('b', 600, 30),
+      { ...t('c', 600, 30), rolling: true, day: '2026-11-20' },
+    ]
+    expect(rollOver(tasks, now)).toEqual(tasks)
   })
 })
