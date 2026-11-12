@@ -951,3 +951,55 @@ button {
     transition: none !important;
   }
 }
+
+/* ---------- Account ---------- */
+
+.account {
+  position: relative;
+}
+
+.account .dot {
+  position: absolute;
+  top: 7px;
+  right: 7px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  border: 2px solid var(--panel);
+  background: #22b573;
+}
+
+.account .dot.warn {
+  background: var(--now);
+}
+
+.sheet-title.as-text {
+  border-bottom: 0;
+}
+
+.sheet-note {
+  margin: 10px 0 0;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.sheet-note.error {
+  color: var(--now);
+}
+
+.state {
+  flex: none;
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--muted);
+}
+
+.primary.small {
+  flex: none;
+  padding: 8px 14px;
+  font-size: 14px;
+}
+
+.primary:disabled {
+  opacity: 0.5;
+}

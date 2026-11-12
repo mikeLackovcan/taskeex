@@ -10,6 +10,8 @@ export type Task = {
   done?: boolean
   /** A rolling task moves to today for as long as it is not done. */
   rolling?: boolean
+  /** When it was created, in ms. Keeps the bubbles in the same order on every device. */
+  at?: number
 }
 
 /** Start of the usual hours, in minutes after midnight. */

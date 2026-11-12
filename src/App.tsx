@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useCloud, type Cloud } from './useCloud'
 import {
   DndContext,
   DragOverlay,
@@ -148,6 +149,8 @@ export default function App() {
     }
   }, [theme])
   const isPhone = useIsPhone()
+  const cloud = useCloud(tasks, setTasks)
+  const [accountOpen, setAccountOpen] = useState(false)
 
   useEffect(() => {
     try {
@@ -331,11 +334,13 @@ export default function App() {
         <Tray
           tasks={loose}
           draggingId={draggingId}
-          onAdd={(title) => setTasks((ts) => [...ts, { id: crypto.randomUUID(), title, duration: DEFAULT_DURATION }])}
+          onAdd={(title) => setTasks((ts) => [...ts, { id: crypto.randomUUID(), title, duration: DEFAULT_DURATION, at: Date.now() }])}
           onOpen={setEditingId}
           hasAny={tasks.length > 0}
           theme={theme}
           onTheme={() => setTheme(THEMES[(THEMES.indexOf(theme) + 1) % THEMES.length])}
+          cloud={cloud}
+          onAccount={() => setAccountOpen(true)}
         >
           {isPhone && heads}
           {isPhone && lane}
@@ -423,6 +428,8 @@ export default function App() {
         />
       )}
 
+      {accountOpen && <AccountSheet cloud={cloud} onClose={() => setAccountOpen(false)} />}
+
       {undo && (
         <div className="toast" role="status">
           <span>{undo.message}</span>
@@ -448,6 +455,8 @@ function Tray(props: {
   onOpen: (id: string) => void
   theme: Theme
   onTheme: () => void
+  cloud: Cloud
+  onAccount: () => void
   children?: React.ReactNode
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: TRAY })
@@ -489,6 +498,7 @@ function Tray(props: {
         >
           <ThemeIcon theme={props.theme} />
         </button>
+        {props.cloud.configured && <AccountButton cloud={props.cloud} onClick={props.onAccount} />}
       </form>
       <div className="bubbles">
         {props.tasks.map((t) => (
@@ -502,6 +512,103 @@ function Tray(props: {
       </div>
       {props.children}
     </aside>
+  )
+}
+
+/** What the account needs from the person right now, if anything. */
+const needsAttention = (cloud: Cloud) => !!cloud.account && (cloud.calendar === 'reconnect' || !!cloud.error)
+
+function AccountButton({ cloud, onClick }: { cloud: Cloud; onClick: () => void }) {
+  const label = !cloud.account
+    ? 'Sign in to sync'
+    : needsAttention(cloud)
+      ? 'Account: needs attention'
+      : `Account: ${cloud.account.email}`
+  return (
+    <button type="button" className="ghost theme account" onClick={onClick} aria-label={label} title={label}>
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+        <circle cx="12" cy="8.5" r="3.6" />
+        <path d="M4.8 20c.9-3.6 3.8-5.4 7.2-5.4s6.3 1.8 7.2 5.4" />
+      </svg>
+      {cloud.account && <i className={needsAttention(cloud) ? 'dot warn' : 'dot'} aria-hidden="true" />}
+    </button>
+  )
+}
+
+function AccountSheet({ cloud, onClose }: { cloud: Cloud; onClose: () => void }) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  })
+  const { account } = cloud
+  return (
+    <div className="sheet-backdrop" onClick={onClose}>
+      <div className="sheet" role="dialog" aria-label="Account" onClick={(e) => e.stopPropagation()}>
+        <div className="sheet-head">
+          <strong className="sheet-title as-text">{account ? 'Your account' : 'Sync your tasks'}</strong>
+          <button className="ghost" aria-label="Close" onClick={onClose}>
+            ✕
+          </button>
+        </div>
+        {!account ? (
+          <>
+            <p className="sheet-note">
+              Sign in to see the same tasks on your phone and computer, and to get reminders from Google Calendar.
+              The tasks already here come with you.
+            </p>
+            <div className="sheet-actions">
+              <button className="primary" onClick={cloud.signIn} disabled={account === undefined}>
+                Sign in with Google
+              </button>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="row">
+              <span>
+                Signed in
+                <small>{account.email}</small>
+              </span>
+              <span className="state ok">Syncing</span>
+            </div>
+            <div className="row">
+              <span>
+                Google Calendar
+                <small>
+                  {cloud.calendar === 'reconnect'
+                    ? 'Paused. Connect again to send your latest changes.'
+                    : 'Tasks on a day appear in your "Taskeex" calendar.'}
+                </small>
+              </span>
+              {cloud.calendar === 'reconnect' ? (
+                <button className="primary small" onClick={cloud.reconnect}>
+                  Connect
+                </button>
+              ) : (
+                <span className="state ok">{cloud.calendar === 'working' ? 'Sending' : 'Up to date'}</span>
+              )}
+            </div>
+            <div className="sheet-actions">
+              <button
+                className="ghost"
+                onClick={() => {
+                  cloud.signOut()
+                  onClose()
+                }}
+              >
+                Sign out
+              </button>
+            </div>
+          </>
+        )}
+        {cloud.error && (
+          <p className="sheet-note error" role="alert">
+            {cloud.error}
+          </p>
+        )}
+      </div>
+    </div>
   )
 }
 
