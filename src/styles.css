@@ -1,0 +1,953 @@
+/* Layout: a tray of glossy bubbles beside a quiet time grid. The bubbles carry the colour; everything else stays calm. */
+:root {
+  --bg: #eef3fb;
+  --panel: #ffffff;
+  --ink: #14213d;
+  --muted: #66708a;
+  --line: #dde4f0;
+  --line-soft: #eef2f8;
+  --accent: #2563eb;
+  --accent-soft: #e2ecff;
+  --on-accent: #ffffff;
+  --now: #f43f6e;
+  --danger: #c62f45;
+  --gloss: rgba(255, 255, 255, 0.6);
+  --shadow: 0 12px 32px rgba(20, 33, 61, 0.2);
+  --scrim: rgba(20, 33, 61, 0.35);
+  /* bubble colours */
+  --b0: #bfe0ff;
+  --b1: #c4f0d6;
+  --b2: #ffe7a3;
+  --b3: #ffd3bd;
+  --b4: #ffc8dc;
+  --b5: #dbd0ff;
+  --b6: #b8ecee;
+  --b7: #dcf0a4;
+  --bubble-ink: #14213d;
+
+  --display: 'Fredoka', ui-rounded, 'Segoe UI', system-ui, sans-serif;
+  --text: 'Figtree', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  /* height of one hour on the time grid; keep in step with HOUR_H in App.tsx */
+  --hour: 56px;
+  --gutter: 52px;
+  color-scheme: light;
+}
+
+/* Dark follows the system, unless the host page pins a theme with data-theme. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --bg: #0e1526;
+    --panel: #162038;
+    --ink: #eef2fb;
+    --muted: #98a3bd;
+    --line: #26324f;
+    --line-soft: #1c2742;
+    --accent: #7aa7ff;
+    --accent-soft: #1d2c52;
+    --on-accent: #0e1526;
+    --now: #ff6b90;
+    --danger: #ff8fa0;
+    --gloss: rgba(255, 255, 255, 0.14);
+    --shadow: 0 12px 32px rgba(0, 0, 0, 0.55);
+    --scrim: rgba(0, 0, 0, 0.55);
+    --b0: #1f4f80;
+    --b1: #1d5a43;
+    --b2: #6a5413;
+    --b3: #7a4226;
+    --b4: #7b2e50;
+    --b5: #4a3990;
+    --b6: #176064;
+    --b7: #4b5f18;
+    --bubble-ink: #f3f6fd;
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme='dark'] {
+  --bg: #0e1526;
+  --panel: #162038;
+  --ink: #eef2fb;
+  --muted: #98a3bd;
+  --line: #26324f;
+  --line-soft: #1c2742;
+  --accent: #7aa7ff;
+  --accent-soft: #1d2c52;
+  --on-accent: #0e1526;
+  --now: #ff6b90;
+  --danger: #ff8fa0;
+  --gloss: rgba(255, 255, 255, 0.14);
+  --shadow: 0 12px 32px rgba(0, 0, 0, 0.55);
+  --scrim: rgba(0, 0, 0, 0.55);
+  --b0: #1f4f80;
+  --b1: #1d5a43;
+  --b2: #6a5413;
+  --b3: #7a4226;
+  --b4: #7b2e50;
+  --b5: #4a3990;
+  --b6: #176064;
+  --b7: #4b5f18;
+  --bubble-ink: #f3f6fd;
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  /* no pull-to-refresh or double-tap zoom while dragging on a phone */
+  overscroll-behavior-y: none;
+  touch-action: manipulation;
+  background: var(--bg);
+  color: var(--ink);
+  font: 16px/1.4 var(--text);
+  -webkit-tap-highlight-color: transparent;
+}
+
+button,
+input {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+  border: 0;
+  background: none;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* ---------- layout: tray beside the week on wide screens ---------- */
+
+.app {
+  display: grid;
+  grid-template-columns: 300px 1fr;
+  height: 100%;
+}
+
+.tray {
+  padding-block: 20px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: 16px;
+  overflow-y: auto;
+  transition: background 0.15s;
+}
+
+.tray.over {
+  background: var(--accent-soft);
+}
+
+.wordmark {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 16px 4px;
+  font: 600 24px/1 var(--display);
+  letter-spacing: -0.01em;
+}
+
+/* a small bubble, the mark of the app */
+.wordmark i {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 32% 28%, var(--gloss) 0 22%, transparent 24%),
+    var(--accent);
+}
+
+.tray form {
+  position: relative;
+}
+
+.tray form {
+  display: flex;
+  gap: 4px;
+}
+
+.theme {
+  flex: none;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  color: var(--muted);
+}
+
+.tray input {
+  flex: 1;
+  min-width: 0;
+  padding: 12px 48px 12px 16px;
+  border: 1.5px solid var(--line);
+  border-radius: 999px;
+  background: var(--panel);
+  /* 16px keeps iOS from zooming in on focus */
+  font-size: 16px;
+}
+
+.tray input::placeholder {
+  color: var(--muted);
+}
+
+.tray input:focus {
+  outline: 0;
+  border-color: var(--accent);
+}
+
+.add {
+  position: absolute;
+  top: 5px;
+  bottom: 5px;
+  aspect-ratio: 1;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--on-accent);
+  font-size: 22px;
+  line-height: 1;
+  animation: pop 0.15s;
+  /* sits inside the input, left of the theme button */
+  right: 53px;
+}
+
+.bubbles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.hint {
+  margin: 4px 6px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.calendar {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  padding-block: 16px;
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+
+.week-bar {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin: 0 0 10px 8px;
+}
+
+.week-bar h2 {
+  margin: 0 10px 0 0;
+  font: 600 20px/1.2 var(--display);
+}
+
+.ghost {
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 12px;
+  border-radius: 12px;
+  font-size: 15px;
+}
+
+.ghost:hover {
+  background: var(--line);
+}
+
+.arrow {
+  font-size: 24px;
+  line-height: 1;
+}
+
+.today-btn {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* ---------- the time grid ---------- */
+
+.grid-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  border-radius: 20px;
+  background: var(--panel);
+}
+
+.heads,
+.grid {
+  display: grid;
+  grid-template-columns: var(--gutter) repeat(7, minmax(0, 1fr));
+}
+
+/* day names and the "any time" lane stay in view while the hours scroll under them */
+.top {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
+}
+
+.lane {
+  display: grid;
+  grid-template-columns: var(--gutter) repeat(7, minmax(0, 1fr));
+}
+
+.lane-label {
+  padding: 8px 8px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.2;
+  text-align: right;
+}
+
+/* a day's tasks that have no set time */
+.any {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-height: 34px;
+  padding: 3px;
+  border-left: 1px solid var(--line);
+  transition: background 0.15s;
+}
+
+.any.over {
+  background: var(--accent-soft);
+  box-shadow: inset 0 0 0 2px var(--accent);
+  border-radius: 10px;
+}
+
+.any-hint {
+  display: none;
+}
+
+.any .bubble-btn,
+.any .bubble {
+  display: flex;
+  width: 100%;
+  border-radius: 10px;
+}
+
+.any .bubble {
+  min-height: 28px;
+  padding: 4px 10px;
+  font-size: 14px;
+}
+
+.any .bubble small {
+  display: none;
+}
+
+.time-pick {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* a day's header is also a drop target: the task takes the next free slot */
+.head {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 52px;
+  padding: 0 4px;
+  border-radius: 12px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 500;
+  transition: background 0.15s;
+}
+
+.head b {
+  display: inline-grid;
+  place-items: center;
+  min-width: 30px;
+  height: 30px;
+  padding: 0 6px;
+  border-radius: 999px;
+  color: var(--ink);
+  font: 600 18px/1 var(--display);
+}
+
+.head.today b {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+.head.over {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.dot {
+  display: none;
+}
+
+.gutter {
+  position: relative;
+  height: calc(var(--hour) * 24);
+}
+
+.gutter span {
+  position: absolute;
+  right: 8px;
+  translate: 0 -50%;
+  color: var(--muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.col {
+  position: relative;
+  height: calc(var(--hour) * 24);
+  border-left: 1px solid var(--line);
+  /* a line on every hour and a fainter one on the half hour */
+  background-image:
+    linear-gradient(var(--line) 1px, transparent 1px), linear-gradient(var(--line-soft) 1px, transparent 1px);
+  background-size:
+    100% var(--hour),
+    100% var(--hour);
+  background-position:
+    0 -1px,
+    0 calc(var(--hour) / 2 - 1px);
+}
+
+.col.today {
+  background-color: color-mix(in srgb, var(--accent-soft) 45%, transparent);
+}
+
+.now {
+  position: absolute;
+  left: 0;
+  right: 0;
+  z-index: 3;
+  height: 2px;
+  translate: 0 -1px;
+  background: var(--now);
+  pointer-events: none;
+}
+
+.now::before {
+  content: '';
+  position: absolute;
+  left: -5px;
+  top: -4px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--now);
+}
+
+/* where the lifted bubble will land */
+.slot {
+  position: absolute;
+  left: 3px;
+  right: 3px;
+  z-index: 2;
+  min-height: 22px;
+  padding: 2px 8px;
+  border: 2px dashed var(--accent);
+  border-radius: 12px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+
+/* ---------- bubbles ---------- */
+
+.bubble-btn {
+  padding: 0;
+  max-width: 100%;
+  border-radius: 999px;
+  text-align: left;
+  cursor: grab;
+  /* let a swipe scroll, while a short press lifts the bubble */
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  transition: opacity 0.15s;
+}
+
+.tray .bubble-btn {
+  animation: pop 0.2s cubic-bezier(0.2, 0.8, 0.2, 1.2);
+}
+
+.bubble {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  max-width: 100%;
+  min-height: 42px;
+  padding: 10px 16px;
+  border-radius: 999px;
+  /* the gloss: a soft highlight at the top left, like light on a bubble */
+  background:
+    radial-gradient(130% 100% at 18% -10%, var(--gloss), transparent 55%),
+    var(--c);
+  color: var(--bubble-ink);
+  transition: transform 0.12s;
+}
+
+.c0 {
+  --c: var(--b0);
+}
+.c1 {
+  --c: var(--b1);
+}
+.c2 {
+  --c: var(--b2);
+}
+.c3 {
+  --c: var(--b3);
+}
+.c4 {
+  --c: var(--b4);
+}
+.c5 {
+  --c: var(--b5);
+}
+.c6 {
+  --c: var(--b6);
+}
+.c7 {
+  --c: var(--b7);
+}
+
+.tray .bubble-btn:hover .bubble {
+  transform: translateY(-1px);
+}
+
+.bubble .title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+
+.bubble time,
+.bubble small {
+  flex: none;
+  font-size: 12px;
+  opacity: 0.72;
+  font-variant-numeric: tabular-nums;
+}
+
+.bubble.lifted {
+  box-shadow: var(--shadow);
+  cursor: grabbing;
+}
+
+.bubble.done {
+  opacity: 0.5;
+}
+
+.bubble.done .title {
+  text-decoration: line-through;
+}
+
+/* on the grid a bubble is a block: its top is its start, its height its length */
+.block {
+  position: absolute;
+  left: 3px;
+  right: 3px;
+  z-index: 1;
+  min-height: 22px;
+  border-radius: 12px;
+  container-type: size;
+}
+
+.block .bubble {
+  display: flex;
+  width: 100%;
+  height: calc(100% - 2px);
+  min-height: 0;
+  padding: 0 10px;
+  align-items: center;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.block .bubble .title {
+  flex: 1;
+  min-width: 0;
+  font-size: 14px;
+}
+
+/* a short block in a narrow column shows only its name; its place on the grid tells the time */
+@container (max-width: 220px) and (max-height: 43px) {
+  .block .bubble time {
+    display: none;
+  }
+}
+
+/* a block with room stacks the name over the time */
+@container (min-height: 44px) {
+  .block .bubble {
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: flex-start;
+    gap: 0;
+    padding: 6px 10px;
+  }
+
+  .block .bubble .title {
+    flex: none;
+  }
+}
+
+/* ---------- task details ---------- */
+
+.sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: var(--scrim);
+  animation: fade 0.15s;
+}
+
+.sheet {
+  width: min(420px, 100%);
+  padding: 20px;
+  border-radius: 24px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+  animation: rise 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.sheet-head {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.sheet-title {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 0;
+  border: 0;
+  border-bottom: 1.5px solid var(--line);
+  background: none;
+  font: 600 22px/1.3 var(--display);
+}
+
+.sheet-title:focus {
+  outline: 0;
+  border-color: var(--accent);
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 48px;
+  margin-top: 8px;
+}
+
+.row small {
+  display: block;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.row input[type='time'] {
+  min-height: 40px;
+  padding: 0 12px;
+  border: 1.5px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+  font-size: 16px;
+  font-variant-numeric: tabular-nums;
+}
+
+.row input[type='checkbox'] {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  accent-color: var(--accent);
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 12px 0 4px;
+}
+
+.chip {
+  min-height: 40px;
+  padding: 0 14px;
+  border: 1.5px solid var(--line);
+  border-radius: 999px;
+}
+
+.chip.on {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--on-accent);
+  font-weight: 600;
+}
+
+.sheet-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  margin-top: 16px;
+}
+
+.danger {
+  color: var(--danger);
+}
+
+.primary {
+  margin-left: auto;
+  min-height: 44px;
+  padding: 0 20px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--on-accent);
+  font-weight: 700;
+}
+
+/* ---------- undo ---------- */
+
+.toast {
+  position: fixed;
+  z-index: 30;
+  left: 50%;
+  bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: calc(100vw - 32px);
+  padding: 6px 6px 6px 18px;
+  border-radius: 999px;
+  background: var(--ink);
+  color: var(--bg);
+  font-size: 14px;
+  box-shadow: var(--shadow);
+  animation: rise 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.toast span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.toast button {
+  flex: none;
+  min-height: 36px;
+  padding: 0 14px;
+  border-radius: 999px;
+  color: inherit;
+  font-weight: 700;
+  background: color-mix(in srgb, var(--bg) 22%, transparent);
+}
+
+@keyframes fade {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    translate: 0 12px;
+  }
+}
+
+@keyframes pop {
+  from {
+    opacity: 0;
+    scale: 0.85;
+  }
+}
+
+/* ---------- phone: bubbles and a strip of days pinned on top, one day's time grid below ---------- */
+
+@media (max-width: 760px) {
+  html,
+  body,
+  #root {
+    height: auto;
+  }
+
+  .app {
+    display: block;
+  }
+
+  .tray {
+    position: sticky;
+    top: env(safe-area-inset-top, 0px);
+    z-index: 6;
+    padding-block: 10px 8px;
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    border-bottom: 1px solid var(--line);
+    background: var(--bg);
+    overflow: visible;
+  }
+
+  .wordmark {
+    display: none;
+  }
+
+  .bubbles {
+    margin-top: 10px;
+    max-height: 100px;
+    overflow-y: auto;
+  }
+
+  /* the strip of days: tap one to see it, or drop a bubble on it */
+  .heads {
+    position: static;
+    display: flex;
+    gap: 4px;
+    margin: 10px -4px 0;
+    padding: 0 4px 2px;
+    border: 0;
+    background: none;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .heads::-webkit-scrollbar {
+    display: none;
+  }
+
+  .head {
+    flex: none;
+    flex-direction: column;
+    gap: 0;
+    width: 46px;
+    min-height: 58px;
+    padding: 4px 0;
+    border-radius: 16px;
+    font-size: 12px;
+  }
+
+  .lane {
+    display: block;
+    margin-top: 6px;
+  }
+
+  .any {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    min-height: 44px;
+    max-height: 92px;
+    padding: 4px;
+    overflow-y: auto;
+    border: 1.5px dashed var(--line);
+    border-radius: 14px;
+  }
+
+  .any .bubble-btn {
+    width: auto;
+    max-width: 100%;
+  }
+
+  .any .bubble {
+    min-height: 34px;
+    padding: 6px 12px;
+    border-radius: 999px;
+  }
+
+  .any-hint {
+    display: block;
+    padding: 0 8px;
+    color: var(--muted);
+    font-size: 13px;
+  }
+
+  .head.selected {
+    background: var(--panel);
+    box-shadow: inset 0 0 0 1.5px var(--accent);
+    color: var(--accent);
+  }
+
+  .dot {
+    display: block;
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    margin-top: 3px;
+  }
+
+  .dot.on {
+    background: var(--accent);
+  }
+
+  .calendar {
+    padding-block: 12px 96px;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+  }
+
+  .grid-scroll {
+    overflow: visible;
+  }
+
+  .grid {
+    grid-template-columns: var(--gutter) minmax(0, 1fr);
+  }
+
+  .block .bubble .title {
+    font-size: 15px;
+  }
+
+  /* details slide up from the bottom, within reach of a thumb */
+  .sheet-backdrop {
+    place-items: end center;
+    padding: 0;
+  }
+
+  .chips {
+    flex-wrap: nowrap;
+    gap: 6px;
+  }
+
+  .chip {
+    flex: 1;
+    padding: 0 4px;
+    white-space: nowrap;
+  }
+
+  .sheet {
+    width: 100%;
+    padding-bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+    border-radius: 24px 24px 0 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation: none !important;
+    transition: none !important;
+  }
+}
