@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { freeStartAt, nextFreeSlot, placeAt, resize, rollOver, schedule, setStart, unschedule, weekStart, dayKey, type Task } from './schedule'
+import { freeStartAt, moveToDay, setDay, nextFreeSlot, placeAt, resize, rollOver, schedule, setStart, unschedule, weekStart, dayKey, type Task } from './schedule'
 
 const t = (id: string, start: number, duration: number): Task => ({ id, title: id, duration, day: '2026-11-12', start })
 
@@ -99,5 +99,27 @@ describe('placeAt', () => {
   it('stays inside the day', () => {
     expect(freeStartAt([{ id: 'x', title: 'x', duration: 60 }], 'x', '2026-11-12', 1500)).toBe(1380)
     expect(freeStartAt([{ id: 'x', title: 'x', duration: 60 }], 'x', '2026-11-12', -40)).toBe(0)
+  })
+})
+
+describe('day tasks without a set time', () => {
+  const loose: Task = { id: 'x', title: 'x', duration: 30 }
+  it('setDay gives a day and no time', () => {
+    expect(setDay([t('a', 540, 30)], 'a', '2026-11-13')[0]).toEqual({ id: 'a', title: 'a', duration: 30, day: '2026-11-13' })
+  })
+  it('timed tasks ignore them when finding a slot', () => {
+    const day = [{ ...loose, id: 'u', day: '2026-11-12' }, loose]
+    expect(placeAt(day, 'x', '2026-11-12', 540)[1].start).toBe(540)
+    expect(schedule(day, 'x', '2026-11-12', new Date(2026, 10, 1))[1].start).toBe(540)
+  })
+  it('moveToDay keeps the time of a timed task', () => {
+    expect(moveToDay([t('a', 600, 30)], 'a', '2026-11-14')[0]).toMatchObject({ day: '2026-11-14', start: 600 })
+  })
+  it('moveToDay keeps a loose bubble without a time', () => {
+    expect(moveToDay([loose], 'x', '2026-11-14')[0]).toEqual({ ...loose, day: '2026-11-14' })
+  })
+  it('a rolling day task rolls over without getting a time', () => {
+    const out = rollOver([{ ...loose, day: '2026-11-10', rolling: true }], new Date(2026, 10, 14, 8, 0))
+    expect(out[0]).toEqual({ ...loose, day: '2026-11-14', rolling: true })
   })
 })

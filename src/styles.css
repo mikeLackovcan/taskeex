@@ -102,6 +102,9 @@ body,
 
 body {
   margin: 0;
+  /* no pull-to-refresh or double-tap zoom while dragging on a phone */
+  overscroll-behavior-y: none;
+  touch-action: manipulation;
   background: var(--bg);
   color: var(--ink);
   font: 16px/1.4 var(--text);
@@ -168,8 +171,22 @@ button {
   position: relative;
 }
 
+.tray form {
+  display: flex;
+  gap: 4px;
+}
+
+.theme {
+  flex: none;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  color: var(--muted);
+}
+
 .tray input {
-  width: 100%;
+  flex: 1;
+  min-width: 0;
   padding: 12px 48px 12px 16px;
   border: 1.5px solid var(--line);
   border-radius: 999px;
@@ -190,7 +207,6 @@ button {
 .add {
   position: absolute;
   top: 5px;
-  right: 5px;
   bottom: 5px;
   aspect-ratio: 1;
   border-radius: 999px;
@@ -199,6 +215,8 @@ button {
   font-size: 22px;
   line-height: 1;
   animation: pop 0.15s;
+  /* sits inside the input, left of the theme button */
+  right: 53px;
 }
 
 .bubbles {
@@ -273,12 +291,70 @@ button {
   grid-template-columns: var(--gutter) repeat(7, minmax(0, 1fr));
 }
 
-.heads {
+/* day names and the "any time" lane stay in view while the hours scroll under them */
+.top {
   position: sticky;
   top: 0;
   z-index: 5;
   background: var(--panel);
   border-bottom: 1px solid var(--line);
+}
+
+.lane {
+  display: grid;
+  grid-template-columns: var(--gutter) repeat(7, minmax(0, 1fr));
+}
+
+.lane-label {
+  padding: 8px 8px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.2;
+  text-align: right;
+}
+
+/* a day's tasks that have no set time */
+.any {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-height: 34px;
+  padding: 3px;
+  border-left: 1px solid var(--line);
+  transition: background 0.15s;
+}
+
+.any.over {
+  background: var(--accent-soft);
+  box-shadow: inset 0 0 0 2px var(--accent);
+  border-radius: 10px;
+}
+
+.any-hint {
+  display: none;
+}
+
+.any .bubble-btn,
+.any .bubble {
+  display: flex;
+  width: 100%;
+  border-radius: 10px;
+}
+
+.any .bubble {
+  min-height: 28px;
+  padding: 4px 10px;
+  font-size: 14px;
+}
+
+.any .bubble small {
+  display: none;
+}
+
+.time-pick {
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 
 /* a day's header is also a drop target: the task takes the next free slot */
@@ -772,6 +848,42 @@ button {
     padding: 4px 0;
     border-radius: 16px;
     font-size: 12px;
+  }
+
+  .lane {
+    display: block;
+    margin-top: 6px;
+  }
+
+  .any {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    min-height: 44px;
+    max-height: 92px;
+    padding: 4px;
+    overflow-y: auto;
+    border: 1.5px dashed var(--line);
+    border-radius: 14px;
+  }
+
+  .any .bubble-btn {
+    width: auto;
+    max-width: 100%;
+  }
+
+  .any .bubble {
+    min-height: 34px;
+    padding: 6px 12px;
+    border-radius: 999px;
+  }
+
+  .any-hint {
+    display: block;
+    padding: 0 8px;
+    color: var(--muted);
+    font-size: 13px;
   }
 
   .head.selected {

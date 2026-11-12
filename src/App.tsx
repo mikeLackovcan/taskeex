@@ -21,10 +21,12 @@ import {
   formatDuration,
   formatTime,
   freeStartAt,
+  moveToDay,
   placeAt,
   resize,
   rollOver,
   schedule,
+  setDay,
   setStart,
   unschedule,
   weekStart,
@@ -33,8 +35,15 @@ import {
 
 const STORAGE_KEY = 'taskeex.tasks.v1'
 const TRAY = 'tray'
-/** Drop target id of a day's header: dropping there takes the next free slot. */
+/** Drop target id of a day's header: dropping there moves the task to that day and keeps its time. */
 const HEAD = 'head:'
+/** Drop target id of a day's "any time" lane: dropping there puts the task on that day with no set time. */
+const ANY = 'any:'
+const THEME_KEY = 'taskeex.theme'
+const THEMES = ['system', 'light', 'dark'] as const
+type Theme = (typeof THEMES)[number]
+/** How long a bubble must be held over a day in the phone's strip before the grid switches to it. */
+const SPRING_MS = 650
 const DURATIONS = [15, 30, 60, 90, 120]
 const DEFAULT_DURATION = 30
 const UNDO_MS = 6000
@@ -79,7 +88,7 @@ const collision: CollisionDetection = (args) => {
   const pt = args.pointerCoordinates
   if (!pt) return rectIntersection(args)
   const hits = args.droppableContainers.filter((c) => holds(c.node.current, pt.x, pt.y))
-  const head = hits.find((h) => String(h.id).startsWith(HEAD))
+  const head = hits.find((h) => String(h.id).startsWith(HEAD) || String(h.id).startsWith(ANY))
   const tray = hits.find((h) => h.id === TRAY)
   const inGrid = holds(document.querySelector('.grid-scroll'), pt.x, pt.y)
   const col = inGrid ? hits.find((h) => h !== head && h !== tray) : undefined
@@ -115,6 +124,29 @@ export default function App() {
   const [undo, setUndo] = useState<Undo | null>(null)
   const undoTimer = useRef<number | undefined>(undefined)
   const scroller = useRef<HTMLDivElement>(null)
+  /** True while a bubble is held over a day's name or its "any time" lane. */
+  const overTop = useRef(false)
+  const spring = useRef<{ day: string | null; timer: number | undefined }>({ day: null, timer: undefined })
+  const [theme, setTheme] = useState<Theme>(() => {
+    try {
+      const saved = localStorage.getItem(THEME_KEY) as Theme | null
+      return saved && THEMES.includes(saved) ? saved : 'system'
+    } catch {
+      return 'system'
+    }
+  })
+
+  // "system" leaves the choice to the device; the other two pin a theme on the page.
+  useEffect(() => {
+    const root = document.documentElement
+    if (theme === 'system') root.removeAttribute('data-theme')
+    else root.setAttribute('data-theme', theme)
+    try {
+      localStorage.setItem(THEME_KEY, theme)
+    } catch {
+      // not saved; the choice still holds for this visit
+    }
+  }, [theme])
   const isPhone = useIsPhone()
 
   useEffect(() => {
@@ -184,7 +216,7 @@ export default function App() {
 
   /** The time under the top edge of the lifted bubble, when it is held over a day column. */
   function landingOn(over: string | null, id: string): Preview | null {
-    if (!over || over === TRAY || over.startsWith(HEAD)) return null
+    if (!over || over === TRAY || over.startsWith(HEAD) || over.startsWith(ANY)) return null
     const col = document.querySelector<HTMLElement>(`[data-col="${over}"]`)
     const lifted = document.querySelector<HTMLElement>('.lifted')
     if (!col || !lifted) return null
@@ -194,11 +226,22 @@ export default function App() {
 
   // Runs on every move, and again when the target under the bubble changes.
   function onDragMove(e: DragMoveEvent | DragOverEvent) {
+    const over = e.over ? String(e.over.id) : null
+    overTop.current = !!over && (over.startsWith(HEAD) || over.startsWith(ANY))
+    // On a phone, holding a bubble over a day in the strip opens that day, so it can then be dropped on a time.
+    const held = isPhone && over?.startsWith(HEAD) ? over.slice(HEAD.length) : null
+    if (held !== spring.current.day) {
+      window.clearTimeout(spring.current.timer)
+      spring.current = { day: held, timer: held ? window.setTimeout(() => setSelectedDay(held), SPRING_MS) : undefined }
+    }
     const next = landingOn(e.over ? String(e.over.id) : null, String(e.active.id))
     setPreview((p) => (p?.day === next?.day && p?.start === next?.start ? p : next))
   }
 
   function endDrag() {
+    window.clearTimeout(spring.current.timer)
+    spring.current = { day: null, timer: undefined }
+    overTop.current = false
     setDraggingId(null)
     setPreview(null)
   }
@@ -215,13 +258,22 @@ export default function App() {
       if (task.day) change(unschedule(tasks, id), `“${task.title}” is a bubble again`)
       return
     }
-    const onHead = target.startsWith(HEAD)
-    const day = onHead ? target.slice(HEAD.length) : target
-    if (onHead && day === task.day) return
-    const next = onHead || !landing ? schedule(tasks, id, day) : placeAt(tasks, id, landing.day, landing.start)
+    let next: Task[]
+    let day: string
+    if (target.startsWith(ANY)) {
+      day = target.slice(ANY.length)
+      next = setDay(tasks, id, day)
+    } else if (target.startsWith(HEAD)) {
+      day = target.slice(HEAD.length)
+      next = moveToDay(tasks, id, day)
+    } else {
+      day = target
+      next = landing ? placeAt(tasks, id, landing.day, landing.start) : schedule(tasks, id, day)
+    }
     const placed = next.find((t) => t.id === id)!
     if (placed.day === task.day && placed.start === task.start) return
-    change(next, `Moved to ${weekday(day)} at ${formatTime(placed.start!)}`)
+    const when = placed.start === undefined ? ', any time' : ` at ${formatTime(placed.start)}`
+    change(next, `Moved to ${weekday(day)}${when}`)
   }
 
   const first = new Date(`${strip[0]}T00:00`)
@@ -244,10 +296,28 @@ export default function App() {
     </div>
   )
 
+  // Tasks for a day with no set time sit in a lane above the grid.
+  const lane = (
+    <div className="lane">
+      {!isPhone && <div className="lane-label">Any time</div>}
+      {columns.map((key) => (
+        <AnyTime
+          key={key}
+          day={key}
+          tasks={tasks.filter((t) => t.day === key && t.start === undefined)}
+          draggingId={draggingId}
+          onOpen={setEditingId}
+        />
+      ))}
+    </div>
+  )
+
   return (
     <DndContext
       sensors={sensors}
       collisionDetection={collision}
+      // The day names sit at the top edge of the grid. Aiming at one must not scroll the hours away.
+      autoScroll={{ canScroll: () => !overTop.current }}
       onDragStart={(e) => {
         setDraggingId(String(e.active.id))
         navigator.vibrate?.(8)
@@ -264,8 +334,11 @@ export default function App() {
           onAdd={(title) => setTasks((ts) => [...ts, { id: crypto.randomUUID(), title, duration: DEFAULT_DURATION }])}
           onOpen={setEditingId}
           hasAny={tasks.length > 0}
+          theme={theme}
+          onTheme={() => setTheme(THEMES[(THEMES.indexOf(theme) + 1) % THEMES.length])}
         >
           {isPhone && heads}
+          {isPhone && lane}
         </Tray>
 
         <main className="calendar">
@@ -286,7 +359,12 @@ export default function App() {
             </header>
           )}
           <div className="grid-scroll" ref={scroller}>
-            {!isPhone && heads}
+            {!isPhone && (
+              <div className="top">
+                {heads}
+                {lane}
+              </div>
+            )}
             <div className="grid">
               <div className="gutter" aria-hidden="true">
                 {HOURS.slice(1).map((h) => (
@@ -301,7 +379,7 @@ export default function App() {
                   day={key}
                   isToday={key === todayKey}
                   nowMinutes={now.getHours() * 60 + now.getMinutes()}
-                  tasks={tasks.filter((t) => t.day === key)}
+                  tasks={tasks.filter((t) => t.day === key && t.start !== undefined)}
                   draggingId={draggingId}
                   preview={preview?.day === key && dragging ? { ...dragging, start: preview.start } : undefined}
                   onOpen={setEditingId}
@@ -321,6 +399,7 @@ export default function App() {
           onRename={(title) => setTasks((ts) => ts.map((t) => (t.id === editing.id ? { ...t, title } : t)))}
           onDuration={(d) => setTasks((ts) => resize(ts, editing.id, d))}
           onStart={(start) => setTasks((ts) => setStart(ts, editing.id, start))}
+          onNoTime={() => setTasks((ts) => (editing.day ? setDay(ts, editing.id, editing.day) : ts))}
           onRolling={(rolling) => setTasks((ts) => ts.map((t) => (t.id === editing.id ? { ...t, rolling } : t)))}
           onDone={() => {
             const done = !editing.done
@@ -367,6 +446,8 @@ function Tray(props: {
   hasAny: boolean
   onAdd: (title: string) => void
   onOpen: (id: string) => void
+  theme: Theme
+  onTheme: () => void
   children?: React.ReactNode
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: TRAY })
@@ -399,6 +480,15 @@ function Tray(props: {
             +
           </button>
         )}
+        <button
+          type="button"
+          className="ghost theme"
+          onClick={props.onTheme}
+          aria-label={`Theme: ${props.theme}. Change theme`}
+          title={`Theme: ${props.theme}`}
+        >
+          <ThemeIcon theme={props.theme} />
+        </button>
       </form>
       <div className="bubbles">
         {props.tasks.map((t) => (
@@ -429,6 +519,42 @@ function DayHead(props: { day: string; isToday: boolean; selected: boolean; coun
       <b>{Number(props.day.slice(8))}</b>
       <i className={props.count ? 'dot on' : 'dot'} aria-hidden="true" />
     </button>
+  )
+}
+
+function ThemeIcon({ theme }: { theme: Theme }) {
+  const common = { width: 22, height: 22, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 2, strokeLinecap: 'round' as const }
+  if (theme === 'light')
+    return (
+      <svg {...common} aria-hidden="true">
+        <circle cx="12" cy="12" r="4" />
+        <path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" />
+      </svg>
+    )
+  if (theme === 'dark')
+    return (
+      <svg {...common} aria-hidden="true">
+        <path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z" />
+      </svg>
+    )
+  // follows the device: half light, half dark
+  return (
+    <svg {...common} aria-hidden="true">
+      <circle cx="12" cy="12" r="8" />
+      <path d="M12 4a8 8 0 0 1 0 16z" fill="currentColor" />
+    </svg>
+  )
+}
+
+function AnyTime(props: { day: string; tasks: Task[]; draggingId: string | null; onOpen: (id: string) => void }) {
+  const { setNodeRef, isOver } = useDroppable({ id: ANY + props.day })
+  return (
+    <div ref={setNodeRef} className={isOver ? 'any over' : 'any'}>
+      {props.tasks.map((t) => (
+        <Bubble key={t.id} task={t} hidden={t.id === props.draggingId} onOpen={props.onOpen} />
+      ))}
+      {props.tasks.length === 0 && <span className="any-hint">Any time</span>}
+    </div>
   )
 }
 
@@ -472,6 +598,8 @@ function Bubble({ task, hidden, onOpen }: { task: Task; hidden: boolean; onOpen:
         ...(onGrid && { top: px(task.start!), height: px(task.duration) }),
       }}
       onClick={() => onOpen(task.id)}
+      // a long press on Android would otherwise open the browser's menu
+      onContextMenu={(e) => e.preventDefault()}
     >
       <BubbleFace task={task} />
     </button>
@@ -503,6 +631,7 @@ function Editor(props: {
   onRename: (title: string) => void
   onDuration: (minutes: number) => void
   onStart: (minutes: number) => void
+  onNoTime: () => void
   onRolling: (rolling: boolean) => void
   onDone: () => void
   onUnschedule: () => void
@@ -530,21 +659,33 @@ function Editor(props: {
           </button>
         </div>
         {task.day && (
-          <label className="row">
+          <div className="row">
             <span>
               Starts at
               <small>{new Date(`${task.day}T00:00`).toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })}</small>
             </span>
-            <input
-              type="time"
-              step={900}
-              value={`${String(Math.floor(task.start! / 60)).padStart(2, '0')}:${String(task.start! % 60).padStart(2, '0')}`}
-              onChange={(e) => {
-                const [h, m] = e.target.value.split(':').map(Number)
-                if (!Number.isNaN(h) && !Number.isNaN(m)) props.onStart(h * 60 + m)
-              }}
-            />
-          </label>
+            <span className="time-pick">
+              {task.start !== undefined && (
+                <button type="button" className="ghost" onClick={props.onNoTime}>
+                  No time
+                </button>
+              )}
+              <input
+                type="time"
+                aria-label="Start time"
+                step={900}
+                value={
+                  task.start === undefined
+                    ? ''
+                    : `${String(Math.floor(task.start / 60)).padStart(2, '0')}:${String(task.start % 60).padStart(2, '0')}`
+                }
+                onChange={(e) => {
+                  const [h, m] = e.target.value.split(':').map(Number)
+                  if (!Number.isNaN(h) && !Number.isNaN(m)) props.onStart(h * 60 + m)
+                }}
+              />
+            </span>
+          </div>
         )}
         <div className="chips" role="group" aria-label="Length">
           {DURATIONS.map((d) => (

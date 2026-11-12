@@ -5,7 +5,7 @@ export type Task = {
   duration: number
   /** Day it is scheduled on, as YYYY-MM-DD. Missing while it is still a loose bubble. */
   day?: string
-  /** Start time in minutes after midnight. */
+  /** Start time in minutes after midnight. Missing on a day task that has no set time. */
   start?: number
   done?: boolean
   /** A rolling task moves to today for as long as it is not done. */
@@ -75,9 +75,9 @@ export const unschedule = (tasks: Task[], id: string) =>
 /** Keep task `id` where it is and push the tasks after it down until nothing overlaps it. */
 function pushLater(tasks: Task[], id: string) {
   const task = tasks.find((t) => t.id === id)
-  if (!task?.day) return tasks
+  if (!task?.day || task.start === undefined) return tasks
   const later = tasks
-    .filter((t) => t.day === task.day && t.id !== id && t.start! >= task.start!)
+    .filter((t) => t.day === task.day && t.id !== id && t.start !== undefined && t.start >= task.start!)
     .sort((a, b) => a.start! - b.start!)
   let end = task.start! + task.duration
   for (const t of later) {
@@ -104,7 +104,9 @@ export function freeStartAt(tasks: Task[], id: string, day: string, wanted: numb
   const task = tasks.find((t) => t.id === id)
   const duration = task?.duration ?? 0
   let start = Math.min(Math.max(Math.round(wanted / STEP) * STEP, 0), DAY_END - duration)
-  const others = tasks.filter((t) => t.day === day && t.id !== id).sort((a, b) => a.start! - b.start!)
+  const others = tasks
+    .filter((t) => t.day === day && t.id !== id && t.start !== undefined)
+    .sort((a, b) => a.start! - b.start!)
   for (const o of others) {
     if (o.start! < start && start < o.start! + o.duration) start = roundUp(o.start! + o.duration)
   }
@@ -130,5 +132,20 @@ export function setStart(tasks: Task[], id: string, start: number) {
 export function rollOver(tasks: Task[], now = new Date()) {
   const today = dayKey(now)
   const late = tasks.filter((t) => t.rolling && !t.done && t.day && t.day < today)
-  return late.reduce((ts, t) => schedule(ts, t.id, today, now), tasks)
+  return late.reduce((ts, t) => (t.start === undefined ? setDay(ts, t.id, today) : schedule(ts, t.id, today, now)), tasks)
+}
+
+/** Put a task on a day with no set time. */
+export const setDay = (tasks: Task[], id: string, day: string) =>
+  tasks.map((t) => {
+    if (t.id !== id) return t
+    const { start: _start, ...rest } = t
+    return { ...rest, day }
+  })
+
+/** Move a task to another day. A task with a time keeps it; a task without one stays without. */
+export function moveToDay(tasks: Task[], id: string, day: string) {
+  const task = tasks.find((t) => t.id === id)
+  if (!task) return tasks
+  return task.start === undefined ? setDay(tasks, id, day) : placeAt(tasks, id, day, task.start)
 }
