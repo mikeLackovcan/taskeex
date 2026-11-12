@@ -3,10 +3,10 @@
 // While they are empty, Taskeex keeps tasks on the device only and shows no sign-in.
 // docs/firebase-setup.md explains where they come from.
 export const firebaseConfig = {
-  apiKey: '',
-  authDomain: '',
-  projectId: '',
-  appId: '',
+  apiKey: 'AIzaSyCKnQovKTwzryfED_0LVcz3q-y587DN6N8',
+  authDomain: 'taskeex-9dcbe.firebaseapp.com',
+  projectId: 'taskeex-9dcbe',
+  appId: '1:337323767411:web:6cbcbd7f34175f38321c06',
 }
 
 /** Set VITE_FIREBASE_EMULATOR=1 to run against the local Firebase emulators (for tests). */
