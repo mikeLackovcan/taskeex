@@ -11,6 +11,7 @@ This is step 1 of the plan: a prototype of the feel.
 - On a phone, hold a bubble over a day in the strip to open that day, then drop it on a time.
 - Drag a task to another time or day, or back to the bubbles.
 - Tap a task to rename it, set its start time and length, mark it done, make it rolling, or delete it. A rolling task that is left undone moves to today.
+- A task on the calendar can repeat every day, on weekdays or every week. Each day's copy is marked done on its own; dragging one copy moves them all.
 - Every move can be undone for a few seconds.
 
 A computer shows the week. A phone shows one day, picked from a strip of days.

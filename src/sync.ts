@@ -1,12 +1,15 @@
 // The rules for keeping tasks the same across devices and in Google Calendar.
 // Nothing here talks to the network, so all of it can be tested.
-import type { Task } from './schedule'
+import type { Repeat, Task } from './schedule'
 
 export type Diff = { upserts: Task[]; removes: Task[] }
 
+const sameValue = (a: unknown, b: unknown) =>
+  a === b || (Array.isArray(a) && Array.isArray(b) && a.length === b.length && a.every((x, i) => x === b[i]))
+
 const same = (a: Task, b: Task) => {
   const keys = new Set([...Object.keys(a), ...Object.keys(b)]) as Set<keyof Task>
-  for (const k of keys) if (a[k] !== b[k]) return false
+  for (const k of keys) if (!sameValue(a[k], b[k])) return false
   return true
 }
 
@@ -48,7 +51,7 @@ export const sortTasks = (tasks: Task[]) =>
  * from the one saved with its event needs the event written again. A task off the calendar has none.
  */
 export const calSig = (t: Task) =>
-  t.day ? JSON.stringify([t.title, t.day, t.start ?? null, t.duration, !!t.done]) : undefined
+  t.day ? JSON.stringify([t.title, t.day, t.start ?? null, t.duration, !!t.done, t.repeat ?? null]) : undefined
 
 /**
  * The id of a task's calendar event. It is worked out from the task's id, so two devices
@@ -70,13 +73,20 @@ function localDateTime(day: string, minutes: number) {
   return { date: ymd, dateTime: `${ymd}T${pad(date.getHours())}:${pad(date.getMinutes())}:00` }
 }
 
+/** Google's repeat rule for each kind of repeat. Weekly repeats on the weekday of the first day. */
+const RRULE: Record<Repeat, string> = {
+  daily: 'RRULE:FREQ=DAILY',
+  weekdays: 'RRULE:FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR',
+  weekly: 'RRULE:FREQ=WEEKLY',
+}
+
 /** Minutes before the start at which Google shows the reminder. */
 export const REMINDER_MINUTES = 10
 
 /** The calendar event for a task that is on a day. */
 export function eventBody(t: Task, timeZone: string) {
   const summary = (t.done ? '✓ ' : '') + t.title
-  const base = { summary, status: 'confirmed', description: 'Made with Taskeex' }
+  const base = { summary, status: 'confirmed', description: 'Made with Taskeex', recurrence: t.repeat ? [RRULE[t.repeat]] : [] }
   if (t.start === undefined) {
     // No set time: an all-day event. Google has no "on the day" reminder for these.
     return {

@@ -1003,3 +1003,10 @@ button {
 .primary:disabled {
   opacity: 0.5;
 }
+
+/* A repeating task carries a small loop after its name. */
+.repeats {
+  margin-left: 5px;
+  font-weight: 700;
+  opacity: 0.6;
+}

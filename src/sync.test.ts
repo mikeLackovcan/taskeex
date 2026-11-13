@@ -81,3 +81,20 @@ describe('calendar', () => {
     expect(calendarWork([a], {}).write).toEqual([a])
   })
 })
+
+describe('repeating tasks in Google Calendar', () => {
+  it('get a repeat rule', () => {
+    expect(eventBody(t('a', { day: '2026-11-12', start: 600, repeat: 'weekdays' }), 'UTC').recurrence).toEqual([
+      'RRULE:FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR',
+    ])
+    expect(eventBody(t('a', { day: '2026-11-12', start: 600 }), 'UTC').recurrence).toEqual([])
+  })
+  it('a day marked done does not change the event, a new repeat does', () => {
+    const a = t('a', { day: '2026-11-12', start: 600, repeat: 'daily' })
+    expect(calSig({ ...a, doneOn: ['2026-11-13'] })).toBe(calSig(a))
+    expect(calSig({ ...a, repeat: 'weekly' })).not.toBe(calSig(a))
+  })
+  it('lists with equal done days are the same', () => {
+    expect(sameTasks([t('a', { doneOn: ['2026-11-13'] })], [t('a', { doneOn: ['2026-11-13'] })])).toBe(true)
+  })
+})

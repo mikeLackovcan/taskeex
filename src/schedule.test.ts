@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { freeStartAt, moveToDay, setDay, nextFreeSlot, placeAt, resize, rollOver, schedule, setStart, unschedule, weekStart, dayKey, type Task } from './schedule'
+import { freeStartAt, moveToDay, setDay, nextFreeSlot, placeAt, resize, rollOver, schedule, setStart, unschedule, weekStart, dayKey, occursOn, onDay, toggleDoneOn, moveCopy, setRepeat, type Task } from './schedule'
 
 const t = (id: string, start: number, duration: number): Task => ({ id, title: id, duration, day: '2026-11-12', start })
 
@@ -121,5 +121,59 @@ describe('day tasks without a set time', () => {
   it('a rolling day task rolls over without getting a time', () => {
     const out = rollOver([{ ...loose, day: '2026-11-10', rolling: true }], new Date(2026, 10, 14, 8, 0))
     expect(out[0]).toEqual({ ...loose, day: '2026-11-14', rolling: true })
+  })
+})
+
+describe('repeating tasks', () => {
+  const r = (id: string, day: string, repeat: Task['repeat'], start?: number): Task => ({ id, title: id, duration: 60, day, start, repeat })
+  it('show on matching days from their first day on', () => {
+    const daily = r('d', '2026-11-12', 'daily', 600) // Thursday
+    const weekly = r('w', '2026-11-12', 'weekly', 600)
+    const weekdays = r('k', '2026-11-12', 'weekdays', 600)
+    expect(occursOn(daily, '2026-11-11')).toBe(false)
+    expect(occursOn(daily, '2026-11-15')).toBe(true)
+    expect(occursOn(weekly, '2026-11-19')).toBe(true)
+    expect(occursOn(weekly, '2026-11-20')).toBe(false)
+    expect(occursOn(weekdays, '2026-11-14')).toBe(false) // Saturday
+    expect(occursOn(weekdays, '2026-11-16')).toBe(true)
+  })
+  it('are done one day at a time', () => {
+    let ts: Task[] = [r('d', '2026-11-12', 'daily', 600)]
+    ts = toggleDoneOn(ts, 'd', '2026-11-13')
+    expect(onDay(ts, '2026-11-13')[0].done).toBe(true)
+    expect(onDay(ts, '2026-11-14')[0].done).toBe(false)
+    expect(toggleDoneOn(ts, 'd', '2026-11-13')[0].doneOn).toBeUndefined()
+  })
+  it('take up their time on every day they show', () => {
+    const ts = [r('d', '2026-11-12', 'daily', 540), { id: 'x', title: 'x', duration: 30 }]
+    expect(schedule(ts, 'x', '2026-11-20').find((t) => t.id === 'x')!.start).toBe(600)
+  })
+  it('hold their time when a one-off task pushes others down', () => {
+    const ts: Task[] = [
+      r('d', '2026-11-12', 'daily', 660), // 11:00 to 12:00 every day
+      { id: 'a', title: 'a', duration: 60, day: '2026-11-13', start: 600 },
+      { id: 'b', title: 'b', duration: 60, day: '2026-11-13' },
+    ]
+    const next = placeAt(ts, 'b', '2026-11-13', 570)
+    expect(next.find((t) => t.id === 'd')!.start).toBe(660)
+    expect(next.find((t) => t.id === 'a')!.start).toBe(720) // pushed past 10:30, then past the daily task
+  })
+  it('move as a whole when one day is dragged', () => {
+    const ts = [r('w', '2026-11-12', 'weekly', 600)]
+    const moved = moveCopy(ts, 'w', '2026-11-19', '2026-11-20', (x, day) => placeAt(x, 'w', day, 720))
+    expect(moved[0]).toMatchObject({ day: '2026-11-13', start: 720 }) // now every Friday at 12:00
+  })
+  it('a weekday task dropped on a weekend only changes its time', () => {
+    const ts = [r('k', '2026-11-12', 'weekdays', 600)]
+    const moved = moveCopy(ts, 'k', '2026-11-13', '2026-11-14', (x, day) => placeAt(x, 'k', day, 720))
+    expect(moved[0]).toMatchObject({ day: '2026-11-12', start: 720 })
+  })
+  it('a weekday repeat set on a weekend starts on Monday', () => {
+    const ts: Task[] = [{ id: 's', title: 's', duration: 30, day: '2026-11-14', rolling: true }]
+    expect(setRepeat(ts, 's', 'weekdays')[0]).toEqual({ id: 's', title: 's', duration: 30, day: '2026-11-16', repeat: 'weekdays' })
+  })
+  it('do not roll over', () => {
+    const ts = [{ ...r('d', '2026-11-10', 'daily', 600), rolling: true }]
+    expect(rollOver(ts, new Date('2026-11-12T12:00'))).toEqual(ts)
   })
 })
