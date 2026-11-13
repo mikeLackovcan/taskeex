@@ -1010,3 +1010,93 @@ button {
   font-weight: 700;
   opacity: 0.6;
 }
+
+/* ---------- Spreading ---------- */
+
+.spread-btn {
+  flex-basis: 100%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 40px;
+  margin-top: 4px;
+  border: 1.5px dashed var(--accent);
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.sheet.spread {
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
+}
+
+.spread-ask input {
+  width: 100%;
+  padding: 12px 16px;
+  border: 1.5px solid var(--line);
+  border-radius: 14px;
+  background: var(--bg);
+  color: var(--ink);
+  font: inherit;
+}
+
+.spread-ask input:focus {
+  outline: 0;
+  border-color: var(--accent);
+}
+
+.suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 8px;
+}
+
+.suggestions button {
+  padding: 6px 10px;
+  color: var(--accent);
+  font-size: 14px;
+}
+
+.plan .understood {
+  margin: 14px 0 6px;
+  font-weight: 600;
+}
+
+.plan ol {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.plan li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.plan li time {
+  flex: none;
+  color: var(--muted);
+}
+
+.ghost.ai {
+  padding: 8px 0;
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* Task names vary in length, so their chips wrap onto more lines, also on a phone. */
+.chips.wrap {
+  flex-wrap: wrap;
+}
+
+.chips.wrap .chip {
+  flex: none;
+  padding: 0 14px;
+}

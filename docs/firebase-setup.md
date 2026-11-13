@@ -43,6 +43,16 @@ The Firebase project is also a Google Cloud project with the same name.
    account of each person who will use it under **Test users**. Google shows a "Google hasn't
    verified this app" screen on first sign-in; choose **Continue**.
 
+## 4. Allow Gemini, for spreading tasks
+
+Common ways of saying how to spread tasks ("every other day 6 to 8 pm", "weekdays, mornings",
+"today") are read on the device, instantly and for free. Gemini is asked only for unusual
+sentences, and only when the person presses "Ask Gemini".
+
+1. Open **Build → AI Logic** in the Firebase console and press **Get started**.
+2. Choose the **Gemini Developer API** (free tier, no card) and finish the steps. Firebase keeps
+   the Gemini key on its side; the app never holds it.
+
 ## What to expect
 
 - Tasks sync between devices within a second or two, and changes made without a connection

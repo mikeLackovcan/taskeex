@@ -1,5 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useCloud, type Cloud } from './useCloud'
+import { applyPlan, cleanRule, describeRule, planSpread, readRule, type SpreadRule } from './spread'
+import { cloudConfigured } from './firebase-config'
 import {
   DndContext,
   DragOverlay,
@@ -176,6 +178,7 @@ export default function App() {
   const isPhone = useIsPhone()
   const cloud = useCloud(tasks, setTasks)
   const [accountOpen, setAccountOpen] = useState(false)
+  const [spreadOpen, setSpreadOpen] = useState(false)
 
   useEffect(() => {
     try {
@@ -373,6 +376,7 @@ export default function App() {
           onTheme={() => setTheme(THEMES[(THEMES.indexOf(theme) + 1) % THEMES.length])}
           cloud={cloud}
           onAccount={() => setAccountOpen(true)}
+          onSpread={() => setSpreadOpen(true)}
         >
           {isPhone && heads}
           {isPhone && lane}
@@ -477,6 +481,23 @@ export default function App() {
 
       {accountOpen && <AccountSheet cloud={cloud} onClose={() => setAccountOpen(false)} />}
 
+      {spreadOpen && (
+        <SpreadSheet
+          tasks={tasks}
+          choices={loose.filter((t) => !t.done)}
+          now={now}
+          onClose={() => setSpreadOpen(false)}
+          onPlace={(plan) => {
+            change(applyPlan(tasks, plan), plan.length === 1 ? 'Placed 1 task' : `Placed ${plan.length} tasks`)
+            setSpreadOpen(false)
+            // Show where the first one went.
+            const first = plan.map((p) => p.day).sort()[0]
+            if (isPhone) setSelectedDay(first)
+            else setWeekOffset(Math.round((weekStart(new Date(`${first}T00:00`)).getTime() - weekStart(now).getTime()) / (7 * 86_400_000)))
+          }}
+        />
+      )}
+
       {undo && (
         <div className="toast" role="status">
           <span>{undo.message}</span>
@@ -504,6 +525,7 @@ function Tray(props: {
   onTheme: () => void
   cloud: Cloud
   onAccount: () => void
+  onSpread: () => void
   children?: React.ReactNode
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: TRAY })
@@ -551,6 +573,11 @@ function Tray(props: {
         {props.tasks.map((t) => (
           <Bubble key={refOf(t)} task={t} hidden={refOf(t) === props.draggingId} onOpen={props.onOpen} />
         ))}
+        {props.tasks.filter((t) => !t.done).length >= 2 && (
+          <button type="button" className="spread-btn" onClick={props.onSpread}>
+            <span aria-hidden="true">✦</span> Spread on calendar
+          </button>
+        )}
         {props.tasks.length === 0 && (
           <p className="hint">
             {props.hasAny ? 'Everything is on the calendar.' : 'Your tasks appear here as bubbles. Drag one onto a time.'}
@@ -654,6 +681,153 @@ function AccountSheet({ cloud, onClose }: { cloud: Cloud; onClose: () => void })
             {cloud.error}
           </p>
         )}
+      </div>
+    </div>
+  )
+}
+
+const SUGGESTIONS = ['Every other day, 6 to 8 pm', 'One a day, evenings', 'Weekdays, mornings', 'Today']
+
+/** Pick some bubbles, say in a few words how to spread them, see where they go, then place them. */
+function SpreadSheet(props: {
+  tasks: Task[]
+  choices: Task[]
+  now: Date
+  onClose: () => void
+  onPlace: (plan: { id: string; day: string; start: number }[]) => void
+}) {
+  const [picked, setPicked] = useState(() => new Set(props.choices.map((t) => t.id)))
+  const [text, setText] = useState('')
+  const [fromAI, setFromAI] = useState<{ text: string; rule: SpreadRule } | null>(null)
+  const [asking, setAsking] = useState(false)
+  const [problem, setProblem] = useState<string | null>(null)
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && props.onClose()
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  })
+
+  const reading = readRule(text, props.now)
+  const rule = fromAI?.text === text ? fromAI.rule : text.trim() && reading.understood ? reading.rule : null
+  const ids = props.choices.filter((t) => picked.has(t.id)).map((t) => t.id)
+  const plan = rule ? planSpread(props.tasks, ids, rule, props.now) : []
+  const left = ids.length - plan.length
+  const needsAI = !!text.trim() && !reading.understood && fromAI?.text !== text
+
+  async function ask() {
+    setAsking(true)
+    setProblem(null)
+    try {
+      const { askGemini } = await import('./ai')
+      const cleaned = cleanRule(await askGemini(text, props.now), props.now)
+      if (cleaned) setFromAI({ text, rule: cleaned })
+      else setProblem('Gemini could not make sense of that. Try saying the days and times.')
+    } catch {
+      setProblem('Gemini is not reachable right now. Try a simpler sentence, like the ones above.')
+    } finally {
+      setAsking(false)
+    }
+  }
+
+  const titleOf = (id: string) => props.tasks.find((t) => t.id === id)?.title ?? ''
+  const dayName = (day: string) =>
+    new Date(`${day}T00:00`).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })
+
+  return (
+    <div className="sheet-backdrop" onClick={props.onClose}>
+      <div className="sheet spread" role="dialog" aria-label="Spread tasks" onClick={(e) => e.stopPropagation()}>
+        <div className="sheet-head">
+          <strong className="sheet-title as-text">Spread on calendar</strong>
+          <button className="ghost" aria-label="Close" onClick={props.onClose}>
+            ✕
+          </button>
+        </div>
+        <div className="chips wrap" role="group" aria-label="Tasks to spread">
+          {props.choices.map((t) => {
+            const on = picked.has(t.id)
+            return (
+              <button
+                key={t.id}
+                className={on ? 'chip on' : 'chip'}
+                aria-pressed={on}
+                onClick={() =>
+                  setPicked((p) => {
+                    const next = new Set(p)
+                    if (on) next.delete(t.id)
+                    else next.add(t.id)
+                    return next
+                  })
+                }
+              >
+                {t.title}
+              </button>
+            )
+          })}
+        </div>
+        <form
+          className="spread-ask"
+          onSubmit={(e) => {
+            e.preventDefault()
+            if (needsAI && cloudConfigured) void ask()
+            else if (plan.length) props.onPlace(plan)
+          }}
+        >
+          <input
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            placeholder="How? e.g. every other day 6 to 8 pm"
+            aria-label="How to spread them"
+            enterKeyHint="go"
+            autoComplete="off"
+            autoFocus={!window.matchMedia(PHONE).matches}
+          />
+        </form>
+        {!text.trim() && (
+          <div className="suggestions">
+            {SUGGESTIONS.map((x) => (
+              <button key={x} type="button" className="ghost" onClick={() => setText(x)}>
+                {x}
+              </button>
+            ))}
+          </div>
+        )}
+        {rule && (
+          <div className="plan" aria-live="polite">
+            <p className="understood">{describeRule(rule, props.now)}</p>
+            <ol>
+              {plan.map((p) => (
+                <li key={p.id}>
+                  <span>{titleOf(p.id)}</span>
+                  <time>
+                    {dayName(p.day)}, {formatTime(p.start)}
+                  </time>
+                </li>
+              ))}
+            </ol>
+            {left > 0 && <p className="sheet-note">{left === 1 ? '1 task does not fit' : `${left} tasks do not fit`} and stays a bubble.</p>}
+          </div>
+        )}
+        {needsAI && (
+          <p className="sheet-note">
+            {cloudConfigured ? (
+              <button type="button" className="ghost ai" onClick={ask} disabled={asking}>
+                {asking ? 'Asking Gemini…' : '✦ Ask Gemini what that means'}
+              </button>
+            ) : (
+              'Not sure what that means. Try saying the days and times, like the examples.'
+            )}
+          </p>
+        )}
+        {problem && (
+          <p className="sheet-note error" role="alert">
+            {problem}
+          </p>
+        )}
+        <div className="sheet-actions">
+          <button className="primary" disabled={!plan.length} onClick={() => props.onPlace(plan)}>
+            {plan.length ? (plan.length === 1 ? 'Place 1 task' : `Place ${plan.length} tasks`) : 'Place tasks'}
+          </button>
+        </div>
       </div>
     </div>
   )
