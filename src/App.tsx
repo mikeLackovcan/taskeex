@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useCloud, type Cloud } from './useCloud'
 import {
   DndContext,
   DragOverlay,
@@ -21,8 +22,13 @@ import {
   formatDuration,
   formatTime,
   freeStartAt,
+  moveCopy,
   moveToDay,
+  onDay,
   placeAt,
+  REPEATS,
+  setRepeat,
+  toggleDoneOn,
   resize,
   rollOver,
   schedule,
@@ -30,6 +36,7 @@ import {
   setStart,
   unschedule,
   weekStart,
+  type Repeat,
   type Task,
 } from './schedule'
 
@@ -55,6 +62,25 @@ const PHONE = '(max-width: 760px)'
 const PHONE_DAYS = 14
 
 const px = (minutes: number) => (minutes * HOUR_H) / 60
+
+/**
+ * What the screen calls a task by. A repeating task shows once per day, so each copy is
+ * named by the task and its day.
+ */
+const refOf = (t: Task) => (t.repeat && t.day ? `${t.id}@${t.day}` : t.id)
+const idOf = (ref: string) => ref.split('@')[0]
+
+/** The task a screen name points at; for a repeating task, its copy on that day. */
+function findRef(tasks: Task[], ref: string | null): Task | undefined {
+  if (!ref) return undefined
+  const [id, day] = ref.split('@')
+  const t = tasks.find((x) => x.id === id)
+  return t && day && t.repeat ? { ...t, day, done: !!t.doneOn?.includes(day) } : t
+}
+
+/** How a repeat reads in a sentence, such as "every Friday". */
+const repeatPhrase = (repeat: Repeat, day: string) =>
+  repeat === 'daily' ? 'every day' : repeat === 'weekdays' ? 'every weekday' : `every ${weekday(day)}`
 
 function loadTasks(): Task[] {
   try {
@@ -148,6 +174,8 @@ export default function App() {
     }
   }, [theme])
   const isPhone = useIsPhone()
+  const cloud = useCloud(tasks, setTasks)
+  const [accountOpen, setAccountOpen] = useState(false)
 
   useEffect(() => {
     try {
@@ -203,8 +231,8 @@ export default function App() {
   const columns = isPhone ? [selectedDay] : strip
 
   const loose = tasks.filter((t) => !t.day).sort((a, b) => Number(!!a.done) - Number(!!b.done))
-  const dragging = tasks.find((t) => t.id === draggingId)
-  const editing = tasks.find((t) => t.id === editingId)
+  const dragging = findRef(tasks, draggingId)
+  const editing = findRef(tasks, editingId)
 
   /** Apply a change and offer to undo it for a few seconds. */
   function change(next: Task[], message: string) {
@@ -221,7 +249,7 @@ export default function App() {
     const lifted = document.querySelector<HTMLElement>('.lifted')
     if (!col || !lifted) return null
     const y = lifted.getBoundingClientRect().top - col.getBoundingClientRect().top
-    return { day: over, start: freeStartAt(tasks, id, over, (y / HOUR_H) * 60) }
+    return { day: over, start: freeStartAt(tasks, idOf(id), over, (y / HOUR_H) * 60) }
   }
 
   // Runs on every move, and again when the target under the bubble changes.
@@ -247,33 +275,40 @@ export default function App() {
   }
 
   function onDragEnd(e: DragEndEvent) {
-    const id = String(e.active.id)
+    const ref = String(e.active.id)
+    const id = idOf(ref)
     const target = e.over ? String(e.over.id) : null
     // Measure before the lifted bubble leaves the screen.
-    const landing = landingOn(target, id)
+    const landing = landingOn(target, ref)
     endDrag()
     const task = tasks.find((t) => t.id === id)
+    /** The day the dragged copy was on. */
+    const from = findRef(tasks, ref)?.day
     if (!task || !target) return
     if (target === TRAY) {
       if (task.day) change(unschedule(tasks, id), `“${task.title}” is a bubble again`)
       return
     }
-    let next: Task[]
+    let place: (ts: Task[], day: string) => Task[]
     let day: string
     if (target.startsWith(ANY)) {
       day = target.slice(ANY.length)
-      next = setDay(tasks, id, day)
+      place = (ts, d) => setDay(ts, id, d)
     } else if (target.startsWith(HEAD)) {
       day = target.slice(HEAD.length)
-      next = moveToDay(tasks, id, day)
+      place = (ts, d) => moveToDay(ts, id, d)
     } else {
       day = target
-      next = landing ? placeAt(tasks, id, landing.day, landing.start) : schedule(tasks, id, day)
+      place = (ts, d) => (landing ? placeAt(ts, id, d, landing.start) : schedule(ts, id, d))
     }
+    const next = moveCopy(tasks, id, from ?? day, day, place)
     const placed = next.find((t) => t.id === id)!
     if (placed.day === task.day && placed.start === task.start) return
     const when = placed.start === undefined ? ', any time' : ` at ${formatTime(placed.start)}`
-    change(next, `Moved to ${weekday(day)}${when}`)
+    change(
+      next,
+      placed.repeat && placed.day ? `Now ${repeatPhrase(placed.repeat, placed.day)}${when}` : `Moved to ${weekday(day)}${when}`,
+    )
   }
 
   const first = new Date(`${strip[0]}T00:00`)
@@ -289,7 +324,7 @@ export default function App() {
           day={key}
           isToday={key === todayKey}
           selected={isPhone && key === selectedDay}
-          count={tasks.filter((t) => t.day === key && !t.done).length}
+          count={onDay(tasks, key).filter((t) => !t.done).length}
           onSelect={() => setSelectedDay(key)}
         />
       ))}
@@ -304,7 +339,7 @@ export default function App() {
         <AnyTime
           key={key}
           day={key}
-          tasks={tasks.filter((t) => t.day === key && t.start === undefined)}
+          tasks={onDay(tasks, key).filter((t) => t.start === undefined)}
           draggingId={draggingId}
           onOpen={setEditingId}
         />
@@ -331,11 +366,13 @@ export default function App() {
         <Tray
           tasks={loose}
           draggingId={draggingId}
-          onAdd={(title) => setTasks((ts) => [...ts, { id: crypto.randomUUID(), title, duration: DEFAULT_DURATION }])}
+          onAdd={(title) => setTasks((ts) => [...ts, { id: crypto.randomUUID(), title, duration: DEFAULT_DURATION, at: Date.now() }])}
           onOpen={setEditingId}
           hasAny={tasks.length > 0}
           theme={theme}
           onTheme={() => setTheme(THEMES[(THEMES.indexOf(theme) + 1) % THEMES.length])}
+          cloud={cloud}
+          onAccount={() => setAccountOpen(true)}
         >
           {isPhone && heads}
           {isPhone && lane}
@@ -379,7 +416,7 @@ export default function App() {
                   day={key}
                   isToday={key === todayKey}
                   nowMinutes={now.getHours() * 60 + now.getMinutes()}
-                  tasks={tasks.filter((t) => t.day === key && t.start !== undefined)}
+                  tasks={onDay(tasks, key).filter((t) => t.start !== undefined)}
                   draggingId={draggingId}
                   preview={preview?.day === key && dragging ? { ...dragging, start: preview.start } : undefined}
                   onOpen={setEditingId}
@@ -399,12 +436,27 @@ export default function App() {
           onRename={(title) => setTasks((ts) => ts.map((t) => (t.id === editing.id ? { ...t, title } : t)))}
           onDuration={(d) => setTasks((ts) => resize(ts, editing.id, d))}
           onStart={(start) => setTasks((ts) => setStart(ts, editing.id, start))}
-          onNoTime={() => setTasks((ts) => (editing.day ? setDay(ts, editing.id, editing.day) : ts))}
+          onNoTime={() =>
+            setTasks((ts) => {
+              const day = ts.find((t) => t.id === editing.id)?.day
+              return day ? setDay(ts, editing.id, day) : ts
+            })
+          }
+          onRepeat={(repeat) =>
+            setTasks((ts) => {
+              // "Once" and "Every Sun" both mean the day being looked at, so the task moves its first day there.
+              const here = editing.day && (!repeat || repeat === 'weekly')
+              const moved = here ? ts.map((t) => (t.id === editing.id ? { ...t, day: editing.day } : t)) : ts
+              return setRepeat(moved, editing.id, repeat)
+            })
+          }
           onRolling={(rolling) => setTasks((ts) => ts.map((t) => (t.id === editing.id ? { ...t, rolling } : t)))}
           onDone={() => {
             const done = !editing.done
             change(
-              tasks.map((t) => (t.id === editing.id ? { ...t, done } : t)),
+              editing.repeat && editing.day
+                ? toggleDoneOn(tasks, editing.id, editing.day)
+                : tasks.map((t) => (t.id === editing.id ? { ...t, done } : t)),
               done ? `Done: ${editing.title}` : `Not done: ${editing.title}`,
             )
             setEditingId(null)
@@ -416,12 +468,14 @@ export default function App() {
           onDelete={() => {
             change(
               tasks.filter((t) => t.id !== editing.id),
-              `Deleted “${editing.title}”`,
+              editing.repeat ? `Deleted “${editing.title}” on every day` : `Deleted “${editing.title}”`,
             )
             setEditingId(null)
           }}
         />
       )}
+
+      {accountOpen && <AccountSheet cloud={cloud} onClose={() => setAccountOpen(false)} />}
 
       {undo && (
         <div className="toast" role="status">
@@ -448,6 +502,8 @@ function Tray(props: {
   onOpen: (id: string) => void
   theme: Theme
   onTheme: () => void
+  cloud: Cloud
+  onAccount: () => void
   children?: React.ReactNode
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: TRAY })
@@ -489,10 +545,11 @@ function Tray(props: {
         >
           <ThemeIcon theme={props.theme} />
         </button>
+        {props.cloud.configured && <AccountButton cloud={props.cloud} onClick={props.onAccount} />}
       </form>
       <div className="bubbles">
         {props.tasks.map((t) => (
-          <Bubble key={t.id} task={t} hidden={t.id === props.draggingId} onOpen={props.onOpen} />
+          <Bubble key={refOf(t)} task={t} hidden={refOf(t) === props.draggingId} onOpen={props.onOpen} />
         ))}
         {props.tasks.length === 0 && (
           <p className="hint">
@@ -502,6 +559,103 @@ function Tray(props: {
       </div>
       {props.children}
     </aside>
+  )
+}
+
+/** What the account needs from the person right now, if anything. */
+const needsAttention = (cloud: Cloud) => !!cloud.account && (cloud.calendar === 'reconnect' || !!cloud.error)
+
+function AccountButton({ cloud, onClick }: { cloud: Cloud; onClick: () => void }) {
+  const label = !cloud.account
+    ? 'Sign in to sync'
+    : needsAttention(cloud)
+      ? 'Account: needs attention'
+      : `Account: ${cloud.account.email}`
+  return (
+    <button type="button" className="ghost theme account" onClick={onClick} aria-label={label} title={label}>
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+        <circle cx="12" cy="8.5" r="3.6" />
+        <path d="M4.8 20c.9-3.6 3.8-5.4 7.2-5.4s6.3 1.8 7.2 5.4" />
+      </svg>
+      {cloud.account && <i className={needsAttention(cloud) ? 'dot warn' : 'dot'} aria-hidden="true" />}
+    </button>
+  )
+}
+
+function AccountSheet({ cloud, onClose }: { cloud: Cloud; onClose: () => void }) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  })
+  const { account } = cloud
+  return (
+    <div className="sheet-backdrop" onClick={onClose}>
+      <div className="sheet" role="dialog" aria-label="Account" onClick={(e) => e.stopPropagation()}>
+        <div className="sheet-head">
+          <strong className="sheet-title as-text">{account ? 'Your account' : 'Sync your tasks'}</strong>
+          <button className="ghost" aria-label="Close" onClick={onClose}>
+            ✕
+          </button>
+        </div>
+        {!account ? (
+          <>
+            <p className="sheet-note">
+              Sign in to see the same tasks on your phone and computer, and to get reminders from Google Calendar.
+              The tasks already here come with you.
+            </p>
+            <div className="sheet-actions">
+              <button className="primary" onClick={cloud.signIn} disabled={account === undefined}>
+                Sign in with Google
+              </button>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="row">
+              <span>
+                Signed in
+                <small>{account.email}</small>
+              </span>
+              <span className="state ok">Syncing</span>
+            </div>
+            <div className="row">
+              <span>
+                Google Calendar
+                <small>
+                  {cloud.calendar === 'reconnect'
+                    ? 'Paused. Connect again to send your latest changes.'
+                    : 'Tasks on a day appear in your "Taskeex" calendar.'}
+                </small>
+              </span>
+              {cloud.calendar === 'reconnect' ? (
+                <button className="primary small" onClick={cloud.reconnect}>
+                  Connect
+                </button>
+              ) : (
+                <span className="state ok">{cloud.calendar === 'working' ? 'Sending' : 'Up to date'}</span>
+              )}
+            </div>
+            <div className="sheet-actions">
+              <button
+                className="ghost"
+                onClick={() => {
+                  cloud.signOut()
+                  onClose()
+                }}
+              >
+                Sign out
+              </button>
+            </div>
+          </>
+        )}
+        {cloud.error && (
+          <p className="sheet-note error" role="alert">
+            {cloud.error}
+          </p>
+        )}
+      </div>
+    </div>
   )
 }
 
@@ -551,7 +705,7 @@ function AnyTime(props: { day: string; tasks: Task[]; draggingId: string | null;
   return (
     <div ref={setNodeRef} className={isOver ? 'any over' : 'any'}>
       {props.tasks.map((t) => (
-        <Bubble key={t.id} task={t} hidden={t.id === props.draggingId} onOpen={props.onOpen} />
+        <Bubble key={refOf(t)} task={t} hidden={refOf(t) === props.draggingId} onOpen={props.onOpen} />
       ))}
       {props.tasks.length === 0 && <span className="any-hint">Any time</span>}
     </div>
@@ -571,7 +725,7 @@ function Column(props: {
   return (
     <section ref={setNodeRef} data-col={props.day} className={props.isToday ? 'col today' : 'col'}>
       {props.tasks.map((t) => (
-        <Bubble key={t.id} task={t} hidden={t.id === props.draggingId} onOpen={props.onOpen} />
+        <Bubble key={refOf(t)} task={t} hidden={refOf(t) === props.draggingId} onOpen={props.onOpen} />
       ))}
       {props.preview && (
         <div className="slot" style={{ top: px(props.preview.start!), height: px(props.preview.duration) }}>
@@ -585,7 +739,7 @@ function Column(props: {
 
 /** A task, as a loose bubble in the tray or as a block on the time grid. */
 function Bubble({ task, hidden, onOpen }: { task: Task; hidden: boolean; onOpen: (id: string) => void }) {
-  const { setNodeRef, attributes, listeners } = useDraggable({ id: task.id })
+  const { setNodeRef, attributes, listeners } = useDraggable({ id: refOf(task) })
   const onGrid = task.start !== undefined
   return (
     <button
@@ -597,7 +751,7 @@ function Bubble({ task, hidden, onOpen }: { task: Task; hidden: boolean; onOpen:
         opacity: hidden ? 0.25 : 1,
         ...(onGrid && { top: px(task.start!), height: px(task.duration) }),
       }}
-      onClick={() => onOpen(task.id)}
+      onClick={() => onOpen(refOf(task))}
       // a long press on Android would otherwise open the browser's menu
       onContextMenu={(e) => e.preventDefault()}
     >
@@ -613,6 +767,11 @@ function BubbleFace({ task, lifted }: { task: Task; lifted?: boolean }) {
       <span className="title">
         {task.done && <span aria-label="Done">✓ </span>}
         {task.title}
+        {task.repeat && (
+          <span className="repeats" aria-label={`, repeats ${repeatPhrase(task.repeat, task.day ?? '')}`} title="Repeats">
+            ↻
+          </span>
+        )}
       </span>
       {task.start !== undefined && !lifted ? (
         <time>
@@ -625,6 +784,10 @@ function BubbleFace({ task, lifted }: { task: Task; lifted?: boolean }) {
   )
 }
 
+/** The short name of a repeat on its button. */
+const repeatLabel = (repeat: Repeat, day: string) =>
+  repeat === 'daily' ? 'Every day' : repeat === 'weekdays' ? 'Weekdays' : `Every ${weekday(day, 'short')}`
+
 function Editor(props: {
   task: Task
   onClose: () => void
@@ -633,6 +796,7 @@ function Editor(props: {
   onStart: (minutes: number) => void
   onNoTime: () => void
   onRolling: (rolling: boolean) => void
+  onRepeat: (repeat: Repeat | undefined) => void
   onDone: () => void
   onUnschedule: () => void
   onDelete: () => void
@@ -694,13 +858,29 @@ function Editor(props: {
             </button>
           ))}
         </div>
-        <label className="row">
-          <span>
-            Rolling
-            <small>Moves to today until it is done</small>
-          </span>
-          <input type="checkbox" checked={!!task.rolling} onChange={(e) => props.onRolling(e.target.checked)} />
-        </label>
+        {task.day && (
+          <div className="chips" role="group" aria-label="Repeats">
+            {[undefined, ...REPEATS].map((r) => (
+              <button
+                key={r ?? 'once'}
+                className={r === task.repeat ? 'chip on' : 'chip'}
+                aria-pressed={r === task.repeat}
+                onClick={() => props.onRepeat(r)}
+              >
+                {r ? repeatLabel(r, task.day!) : 'Once'}
+              </button>
+            ))}
+          </div>
+        )}
+        {!task.repeat && (
+          <label className="row">
+            <span>
+              Rolling
+              <small>Moves to today until it is done</small>
+            </span>
+            <input type="checkbox" checked={!!task.rolling} onChange={(e) => props.onRolling(e.target.checked)} />
+          </label>
+        )}
         <div className="sheet-actions">
           {task.day && (
             <button className="ghost" onClick={props.onUnschedule}>

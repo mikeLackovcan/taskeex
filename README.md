@@ -11,6 +11,7 @@ This is step 1 of the plan: a prototype of the feel.
 - On a phone, hold a bubble over a day in the strip to open that day, then drop it on a time.
 - Drag a task to another time or day, or back to the bubbles.
 - Tap a task to rename it, set its start time and length, mark it done, make it rolling, or delete it. A rolling task that is left undone moves to today.
+- A task on the calendar can repeat every day, on weekdays or every week. Each day's copy is marked done on its own; dragging one copy moves them all.
 - Every move can be undone for a few seconds.
 
 A computer shows the week. A phone shows one day, picked from a strip of days.
@@ -19,7 +20,7 @@ The button beside the task box switches between the device's theme, light and da
 
 Taskeex can be installed as an app: open it in the phone's browser and choose "Add to Home Screen". It opens without a connection once it has been opened online.
 
-Tasks are saved in the browser only. Google Calendar sync and AI spreading come in later steps.
+Tasks are saved on the device. Once a Firebase project is set up ([docs/firebase-setup.md](docs/firebase-setup.md)), an account button appears: signing in with Google keeps the same tasks on every device and puts tasks that are on a day into a "Taskeex" calendar in Google Calendar, with a reminder 10 minutes before a timed task. AI spreading comes in a later step.
 
 ## Run it
 
