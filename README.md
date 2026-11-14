@@ -13,6 +13,8 @@ This is step 1 of the plan: a prototype of the feel.
 - Tap a task to rename it, set its start time and length, mark it done, make it rolling, or delete it. A rolling task that is left undone moves to today.
 - A task on the calendar can repeat every day, on weekdays or every week. Each day's copy is marked done on its own; dragging one copy moves them all.
 - Press "Spread on calendar" under the bubbles, pick tasks and say how, such as "every other day 6 to 8 pm". The plan shows before anything moves. Common sentences are read on the device; Gemini is asked for unusual ones.
+- Type "Gym tomorrow 6pm 1h" in the task box to put a task straight onto the calendar. A line under the box shows where it will go.
+- Pull the bottom edge of a task on the calendar to make it longer or shorter.
 - Every move can be undone for a few seconds.
 
 A computer shows the week. A phone shows one day, picked from a strip of days.

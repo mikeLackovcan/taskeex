@@ -1100,3 +1100,58 @@ button {
   flex: none;
   padding: 0 14px;
 }
+
+/* ---------- Quick add and stretching ---------- */
+
+.quick-hint {
+  flex-basis: 100%;
+  margin: 6px 6px 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.quick-hint b {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+/* The bottom edge of a task on the grid: pull it to change the length. */
+.grip {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -4px;
+  height: 14px;
+  cursor: ns-resize;
+  touch-action: none;
+  z-index: 2;
+}
+
+.grip::after {
+  content: '';
+  position: absolute;
+  left: calc(50% - 12px);
+  bottom: 6px;
+  width: 24px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--bubble-ink);
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.block:hover .grip::after,
+.block.stretching .grip::after {
+  opacity: 0.35;
+}
+
+@media (hover: none) {
+  .grip::after {
+    opacity: 0.25;
+  }
+}
+
+.block.stretching {
+  z-index: 3;
+  box-shadow: var(--shadow);
+}
