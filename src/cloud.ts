@@ -43,6 +43,9 @@ const app = initializeApp(
 )
 const auth = getAuth(app)
 
+/** The Firebase app, for other Firebase services such as Gemini (see ai.ts). */
+export { app }
+
 let db: Firestore
 try {
   // Keeps a copy on the device, so changes made without a connection are sent later.

@@ -12,4 +12,7 @@ export const firebaseConfig = {
 /** Set VITE_FIREBASE_EMULATOR=1 to run against the local Firebase emulators (for tests). */
 export const useEmulator = !!import.meta.env.VITE_FIREBASE_EMULATOR
 
-export const cloudConfigured = useEmulator || !!firebaseConfig.apiKey
+/** Set VITE_LOCAL_ONLY=1 for a preview build that keeps tasks on the device and offers no sign-in. */
+const localOnly = !!import.meta.env.VITE_LOCAL_ONLY
+
+export const cloudConfigured = !localOnly && (useEmulator || !!firebaseConfig.apiKey)
