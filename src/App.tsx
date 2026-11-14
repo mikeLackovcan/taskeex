@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useCloud, type Cloud } from './useCloud'
 import { applyPlan, cleanRule, describeRule, planSpread, readRule, type SpreadRule } from './spread'
 import { cloudConfigured } from './firebase-config'
+import { readQuickAdd } from './quickadd'
 import {
   DndContext,
   DragOverlay,
@@ -237,6 +238,28 @@ export default function App() {
   const dragging = findRef(tasks, draggingId)
   const editing = findRef(tasks, editingId)
 
+  /** Bring a day into view: the phone opens it, the computer turns to its week. */
+  function showDay(day: string) {
+    if (isPhone) setSelectedDay(day)
+    else setWeekOffset(Math.round((weekStart(new Date(`${day}T00:00`)).getTime() - weekStart(now).getTime()) / (7 * 86_400_000)))
+  }
+
+  /** Add a task typed in one line. "Gym tomorrow 6pm 1h" goes straight onto the calendar. */
+  function addTyped(text: string) {
+    const q = readQuickAdd(text, now)
+    const task: Task = { id: crypto.randomUUID(), title: q.title, duration: q.duration ?? DEFAULT_DURATION, at: Date.now() }
+    const withTask = [...tasks, task]
+    if (!q.day) return setTasks(withTask)
+    if (q.start === undefined) {
+      change(setDay(withTask, task.id, q.day), `Added to ${weekday(q.day)}, any time`)
+    } else {
+      const next = placeAt(withTask, task.id, q.day, q.start)
+      const start = next.find((t) => t.id === task.id)!.start!
+      change(next, `Added to ${weekday(q.day)} at ${formatTime(start)}`)
+    }
+    showDay(q.day)
+  }
+
   /** Apply a change and offer to undo it for a few seconds. */
   function change(next: Task[], message: string) {
     setUndo({ message, previous: tasks })
@@ -369,7 +392,7 @@ export default function App() {
         <Tray
           tasks={loose}
           draggingId={draggingId}
-          onAdd={(title) => setTasks((ts) => [...ts, { id: crypto.randomUUID(), title, duration: DEFAULT_DURATION, at: Date.now() }])}
+          onAdd={addTyped}
           onOpen={setEditingId}
           hasAny={tasks.length > 0}
           theme={theme}
@@ -424,6 +447,10 @@ export default function App() {
                   draggingId={draggingId}
                   preview={preview?.day === key && dragging ? { ...dragging, start: preview.start } : undefined}
                   onOpen={setEditingId}
+                  onResize={(ref, minutes) => {
+                    const t = findRef(tasks, ref)
+                    if (t) change(resize(tasks, t.id, minutes), `${t.title}: ${formatDuration(minutes)}`)
+                  }}
                 />
               ))}
             </div>
@@ -491,9 +518,7 @@ export default function App() {
             change(applyPlan(tasks, plan), plan.length === 1 ? 'Placed 1 task' : `Placed ${plan.length} tasks`)
             setSpreadOpen(false)
             // Show where the first one went.
-            const first = plan.map((p) => p.day).sort()[0]
-            if (isPhone) setSelectedDay(first)
-            else setWeekOffset(Math.round((weekStart(new Date(`${first}T00:00`)).getTime() - weekStart(now).getTime()) / (7 * 86_400_000)))
+            showDay(plan.map((p) => p.day).sort()[0])
           }}
         />
       )}
@@ -512,6 +537,22 @@ export default function App() {
         </div>
       )}
     </DndContext>
+  )
+}
+
+/** Under the task box: where a typed task will go, once a day or time is recognised. */
+function QuickHint({ text }: { text: string }) {
+  const q = text.trim() ? readQuickAdd(text) : null
+  if (!q || (!q.day && !q.duration)) return null
+  const parts = [
+    q.day && new Date(`${q.day}T00:00`).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' }),
+    q.start !== undefined ? formatTime(q.start) : q.day && 'any time',
+    q.duration && formatDuration(q.duration),
+  ].filter(Boolean)
+  return (
+    <p className="quick-hint" aria-live="polite">
+      <b>{q.title}</b> → {parts.join(' · ')}
+    </p>
   )
 }
 
@@ -569,6 +610,7 @@ function Tray(props: {
         </button>
         {props.cloud.configured && <AccountButton cloud={props.cloud} onClick={props.onAccount} />}
       </form>
+      <QuickHint text={text} />
       <div className="bubbles">
         {props.tasks.map((t) => (
           <Bubble key={refOf(t)} task={t} hidden={refOf(t) === props.draggingId} onOpen={props.onOpen} />
@@ -580,7 +622,7 @@ function Tray(props: {
         )}
         {props.tasks.length === 0 && (
           <p className="hint">
-            {props.hasAny ? 'Everything is on the calendar.' : 'Your tasks appear here as bubbles. Drag one onto a time.'}
+            {props.hasAny ? 'Everything is on the calendar.' : 'Your tasks appear here as bubbles. Drag one onto a time, or type “Gym tomorrow 6pm” to put it straight there.'}
           </p>
         )}
       </div>
@@ -894,12 +936,13 @@ function Column(props: {
   draggingId: string | null
   preview?: Task
   onOpen: (id: string) => void
+  onResize: (ref: string, minutes: number) => void
 }) {
   const { setNodeRef } = useDroppable({ id: props.day })
   return (
     <section ref={setNodeRef} data-col={props.day} className={props.isToday ? 'col today' : 'col'}>
       {props.tasks.map((t) => (
-        <Bubble key={refOf(t)} task={t} hidden={refOf(t) === props.draggingId} onOpen={props.onOpen} />
+        <Bubble key={refOf(t)} task={t} hidden={refOf(t) === props.draggingId} onOpen={props.onOpen} onResize={props.onResize} />
       ))}
       {props.preview && (
         <div className="slot" style={{ top: px(props.preview.start!), height: px(props.preview.duration) }}>
@@ -912,24 +955,72 @@ function Column(props: {
 }
 
 /** A task, as a loose bubble in the tray or as a block on the time grid. */
-function Bubble({ task, hidden, onOpen }: { task: Task; hidden: boolean; onOpen: (id: string) => void }) {
+/** A task, as a loose bubble in the tray or as a block on the time grid. */
+function Bubble(props: {
+  task: Task
+  hidden: boolean
+  onOpen: (id: string) => void
+  onResize?: (ref: string, minutes: number) => void
+}) {
+  const { task } = props
   const { setNodeRef, attributes, listeners } = useDraggable({ id: refOf(task) })
   const onGrid = task.start !== undefined
+  /** The length while the bottom edge is being pulled. */
+  const [stretch, setStretch] = useState<number | null>(null)
+  const pull = useRef<{ y: number; from: number } | null>(null)
+  const justPulled = useRef(false)
+  const shown = stretch === null ? task : { ...task, duration: stretch }
+  // Keeps a press on the edge from also starting a drag of the whole task.
+  const keep = (e: React.SyntheticEvent) => e.stopPropagation()
   return (
     <button
       ref={setNodeRef}
       {...attributes}
       {...listeners}
-      className={onGrid ? 'bubble-btn block' : 'bubble-btn'}
+      className={['bubble-btn', onGrid && 'block', stretch !== null && 'stretching'].filter(Boolean).join(' ')}
       style={{
-        opacity: hidden ? 0.25 : 1,
-        ...(onGrid && { top: px(task.start!), height: px(task.duration) }),
+        opacity: props.hidden ? 0.25 : 1,
+        ...(onGrid && { top: px(task.start!), height: px(shown.duration) }),
       }}
-      onClick={() => onOpen(refOf(task))}
+      onClick={() => {
+        if (justPulled.current) justPulled.current = false
+        else props.onOpen(refOf(task))
+      }}
       // a long press on Android would otherwise open the browser's menu
       onContextMenu={(e) => e.preventDefault()}
     >
-      <BubbleFace task={task} />
+      <BubbleFace task={shown} />
+      {onGrid && props.onResize && (
+        <span
+          className="grip"
+          aria-hidden="true"
+          onMouseDown={keep}
+          onTouchStart={keep}
+          onKeyDown={keep}
+          onPointerDown={(e) => {
+            e.stopPropagation()
+            e.currentTarget.setPointerCapture(e.pointerId)
+            pull.current = { y: e.clientY, from: task.duration }
+            setStretch(task.duration)
+          }}
+          onPointerMove={(e) => {
+            if (!pull.current) return
+            const minutes = pull.current.from + ((e.clientY - pull.current.y) / HOUR_H) * 60
+            setStretch(Math.min(Math.max(15, Math.round(minutes / 15) * 15), 24 * 60 - task.start!))
+          }}
+          onPointerUp={() => {
+            const from = pull.current?.from
+            pull.current = null
+            justPulled.current = true
+            if (stretch !== null && stretch !== from) props.onResize!(refOf(task), stretch)
+            setStretch(null)
+          }}
+          onPointerCancel={() => {
+            pull.current = null
+            setStretch(null)
+          }}
+        />
+      )}
     </button>
   )
 }
