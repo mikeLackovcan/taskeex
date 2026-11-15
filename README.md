@@ -39,3 +39,7 @@ npm run dev
 ## Publishing
 
 Every push to `main` is tested, built and published to GitHub Pages by `.github/workflows/ci.yml`. Pages must be turned on once in the repository settings, with "GitHub Actions" as its source.
+
+### Vercel
+
+`vercel.json` sets up the build. Import the repository once at <https://vercel.com/new>; after that every push to `main` is published, and every other branch gets its own preview address. Add the Vercel address (for example `taskeex.vercel.app`) to Firebase's authorized domains so Google sign-in works there.
