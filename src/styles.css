@@ -1155,3 +1155,41 @@ button {
   z-index: 3;
   box-shadow: var(--shadow);
 }
+
+/* Empty time can be tapped to add a task there. */
+.col {
+  cursor: pointer;
+}
+
+.col .block {
+  cursor: grab;
+}
+
+/* The day slides in from the side it was swiped to. */
+.grid[data-slide='next'] {
+  animation: slide-next 0.22s ease-out;
+}
+
+.grid[data-slide='prev'] {
+  animation: slide-prev 0.22s ease-out;
+}
+
+@keyframes slide-next {
+  from {
+    transform: translateX(24px);
+    opacity: 0.4;
+  }
+}
+
+@keyframes slide-prev {
+  from {
+    transform: translateX(-24px);
+    opacity: 0.4;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .grid[data-slide] {
+    animation: none;
+  }
+}
