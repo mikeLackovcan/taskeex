@@ -15,6 +15,8 @@ This is step 1 of the plan: a prototype of the feel.
 - Press "Spread on calendar" under the bubbles, pick tasks and say how, such as "every other day 6 to 8 pm". The plan shows before anything moves. Common sentences are read on the device; Gemini is asked for unusual ones.
 - Type "Gym tomorrow 6pm 1h" in the task box to put a task straight onto the calendar. A line under the box shows where it will go.
 - Pull the bottom edge of a task on the calendar to make it longer or shorter.
+- Tap an empty time on the calendar to add a task right there.
+- On a phone, swipe sideways over the hours to go to the next or previous day.
 - Every move can be undone for a few seconds.
 
 A computer shows the week. A phone shows one day, picked from a strip of days.
@@ -37,3 +39,7 @@ npm run dev
 ## Publishing
 
 Every push to `main` is tested, built and published to GitHub Pages by `.github/workflows/ci.yml`. Pages must be turned on once in the repository settings, with "GitHub Actions" as its source.
+
+### Vercel
+
+`vercel.json` sets up the build. Import the repository once at <https://vercel.com/new>; after that every push to `main` is published, and every other branch gets its own preview address. The app's Vercel address is <https://taskeex.vercel.app>. Add `taskeex.vercel.app` to Firebase's authorized domains so Google sign-in works there.

@@ -180,6 +180,11 @@ export default function App() {
   const cloud = useCloud(tasks, setTasks)
   const [accountOpen, setAccountOpen] = useState(false)
   const [spreadOpen, setSpreadOpen] = useState(false)
+  /** An empty time that was tapped, waiting for the new task's name. */
+  const [newAt, setNewAt] = useState<{ day: string; start: number } | null>(null)
+  /** Which way the phone's day last changed by a swipe, for the slide-in. */
+  const [slide, setSlide] = useState<'next' | 'prev' | null>(null)
+  const swipe = useRef<{ x: number; y: number; t: number } | null>(null)
 
   useEffect(() => {
     try {
@@ -259,6 +264,37 @@ export default function App() {
     }
     showDay(q.day)
   }
+
+  /** Add a task with this name at a time that was tapped on the calendar. */
+  function addAt(text: string, day: string, wanted: number) {
+    const q = readQuickAdd(text, now)
+    const task: Task = { id: crypto.randomUUID(), title: q.title, duration: q.duration ?? DEFAULT_DURATION, at: Date.now() }
+    const next = placeAt([...tasks, task], task.id, day, wanted)
+    change(next, `Added to ${weekday(day)} at ${formatTime(next.find((t) => t.id === task.id)!.start!)}`)
+  }
+
+  /** On a phone, a quick sideways swipe over the hours goes to the next or previous day. */
+  const swipeHandlers = isPhone
+    ? {
+        onTouchStart: (e: React.TouchEvent) => {
+          const t = e.touches[0]
+          swipe.current = e.touches.length === 1 ? { x: t.clientX, y: t.clientY, t: Date.now() } : null
+        },
+        onTouchEnd: (e: React.TouchEvent) => {
+          const start = swipe.current
+          swipe.current = null
+          if (!start || draggingId) return
+          const t = e.changedTouches[0]
+          const dx = t.clientX - start.x
+          const dy = t.clientY - start.y
+          if (Date.now() - start.t > 600 || Math.abs(dx) < 60 || Math.abs(dx) < 2 * Math.abs(dy)) return
+          const i = strip.indexOf(selectedDay) + (dx < 0 ? 1 : -1)
+          if (i < 0 || i >= strip.length) return
+          setSlide(dx < 0 ? 'next' : 'prev')
+          setSelectedDay(strip[i])
+        },
+      }
+    : {}
 
   /** Apply a change and offer to undo it for a few seconds. */
   function change(next: Task[], message: string) {
@@ -351,7 +387,10 @@ export default function App() {
           isToday={key === todayKey}
           selected={isPhone && key === selectedDay}
           count={onDay(tasks, key).filter((t) => !t.done).length}
-          onSelect={() => setSelectedDay(key)}
+          onSelect={() => {
+            setSlide(null)
+            setSelectedDay(key)
+          }}
         />
       ))}
     </div>
@@ -422,14 +461,14 @@ export default function App() {
               )}
             </header>
           )}
-          <div className="grid-scroll" ref={scroller}>
+          <div className="grid-scroll" ref={scroller} {...swipeHandlers}>
             {!isPhone && (
               <div className="top">
                 {heads}
                 {lane}
               </div>
             )}
-            <div className="grid">
+            <div className="grid" key={isPhone ? selectedDay : 'week'} data-slide={isPhone ? (slide ?? undefined) : undefined}>
               <div className="gutter" aria-hidden="true">
                 {HOURS.slice(1).map((h) => (
                   <span key={h} style={{ top: px(h * 60) }}>
@@ -445,8 +484,15 @@ export default function App() {
                   nowMinutes={now.getHours() * 60 + now.getMinutes()}
                   tasks={onDay(tasks, key).filter((t) => t.start !== undefined)}
                   draggingId={draggingId}
-                  preview={preview?.day === key && dragging ? { ...dragging, start: preview.start } : undefined}
+                  preview={
+                    preview?.day === key && dragging
+                      ? { ...dragging, start: preview.start }
+                      : newAt?.day === key
+                        ? { id: 'new', title: '', duration: DEFAULT_DURATION, start: newAt.start }
+                        : undefined
+                  }
                   onOpen={setEditingId}
+                  onEmpty={(start) => setNewAt({ day: key, start })}
                   onResize={(ref, minutes) => {
                     const t = findRef(tasks, ref)
                     if (t) change(resize(tasks, t.id, minutes), `${t.title}: ${formatDuration(minutes)}`)
@@ -502,6 +548,18 @@ export default function App() {
               editing.repeat ? `Deleted “${editing.title}” on every day` : `Deleted “${editing.title}”`,
             )
             setEditingId(null)
+          }}
+        />
+      )}
+
+      {newAt && (
+        <NewTaskSheet
+          day={newAt.day}
+          start={newAt.start}
+          onClose={() => setNewAt(null)}
+          onAdd={(text) => {
+            addAt(text, newAt.day, newAt.start)
+            setNewAt(null)
           }}
         />
       )}
@@ -875,6 +933,51 @@ function SpreadSheet(props: {
   )
 }
 
+/** Naming a task for an empty time that was tapped on the calendar. */
+function NewTaskSheet(props: { day: string; start: number; onClose: () => void; onAdd: (text: string) => void }) {
+  const [text, setText] = useState('')
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && props.onClose()
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  })
+  const when = `${new Date(`${props.day}T00:00`).toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })} at ${formatTime(props.start)}`
+  return (
+    <div className="sheet-backdrop" onClick={props.onClose}>
+      <div className="sheet" role="dialog" aria-label={`New task, ${when}`} onClick={(e) => e.stopPropagation()}>
+        <form
+          onSubmit={(e) => {
+            e.preventDefault()
+            if (text.trim()) props.onAdd(text)
+          }}
+        >
+          <div className="sheet-head">
+            <input
+              className="sheet-title"
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              placeholder="New task"
+              aria-label="Task name"
+              enterKeyHint="done"
+              autoComplete="off"
+              autoFocus
+            />
+            <button type="button" className="ghost" aria-label="Close" onClick={props.onClose}>
+              ✕
+            </button>
+          </div>
+          <p className="sheet-note">{when}. Add a length if you like, such as “1h”.</p>
+          <div className="sheet-actions">
+            <button type="submit" className="primary" disabled={!text.trim()}>
+              Add
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
 function DayHead(props: { day: string; isToday: boolean; selected: boolean; count: number; onSelect: () => void }) {
   const { setNodeRef, isOver } = useDroppable({ id: HEAD + props.day })
   const cls = ['head', isOver && 'over', props.isToday && 'today', props.selected && 'selected'].filter(Boolean).join(' ')
@@ -937,10 +1040,21 @@ function Column(props: {
   preview?: Task
   onOpen: (id: string) => void
   onResize: (ref: string, minutes: number) => void
+  onEmpty: (start: number) => void
 }) {
   const { setNodeRef } = useDroppable({ id: props.day })
   return (
-    <section ref={setNodeRef} data-col={props.day} className={props.isToday ? 'col today' : 'col'}>
+    <section
+      ref={setNodeRef}
+      data-col={props.day}
+      className={props.isToday ? 'col today' : 'col'}
+      onClick={(e) => {
+        // Only a tap on empty time; tasks handle their own taps.
+        if (e.target !== e.currentTarget) return
+        const y = e.clientY - e.currentTarget.getBoundingClientRect().top
+        props.onEmpty(Math.min(Math.floor(((y / HOUR_H) * 60) / 15) * 15, 24 * 60 - 15))
+      }}
+    >
       {props.tasks.map((t) => (
         <Bubble key={refOf(t)} task={t} hidden={refOf(t) === props.draggingId} onOpen={props.onOpen} onResize={props.onResize} />
       ))}

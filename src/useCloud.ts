@@ -82,7 +82,10 @@ export function useCloud(tasks: Task[], setTasks: (tasks: Task[]) => void): Clou
     return () => stop()
   }, [])
 
-  const say = (e: unknown) => setError(e instanceof Error ? e.message : String(e))
+  const say = (e: unknown) => {
+    const text = friendlyError(e)
+    if (text) setError(text)
+  }
 
   // Write to Google Calendar whatever it is missing. Runs one at a time.
   const reconcile = useCallback(async () => {
@@ -218,4 +221,22 @@ export function useCloud(tasks: Task[], setTasks: (tasks: Task[]) => void): Clou
   }, [api])
 
   return { configured: cloudConfigured, account, calendar, error, signIn, signOut, reconnect }
+}
+
+/** Turn Firebase and Google errors into one plain sentence, or null when nothing needs saying. */
+export function friendlyError(e: unknown): string | null {
+  const code = (e as { code?: string } | null)?.code ?? ''
+  const msg = e instanceof Error ? e.message : String(e)
+  const has = (k: string) => code === k || msg.includes(k)
+  if (has('auth/popup-closed-by-user') || has('auth/cancelled-popup-request')) return null
+  if (has('auth/configuration-not-found') || has('auth/operation-not-allowed'))
+    return 'Google sign-in is not switched on for this app yet. Your tasks stay on this device for now.'
+  if (has('auth/unauthorized-domain'))
+    return `Google sign-in is not allowed on ${location.hostname} yet. Add it under Authorized domains in Firebase.`
+  if (has('auth/popup-blocked')) return 'Your browser blocked the Google window. Allow pop-ups for this site and try again.'
+  if (has('auth/network-request-failed') || has('unavailable'))
+    return 'No connection right now. Your changes are kept and will sync when you are back online.'
+  if (has('permission-denied') || has('PERMISSION_DENIED') || has('has not been used in project'))
+    return 'Sync is not switched on for this app yet. Your tasks stay on this device for now.'
+  return 'Something went wrong with sync. Your tasks are safe on this device.'
 }

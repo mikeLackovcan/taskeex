@@ -1,7 +1,7 @@
 // Keeps the app opening without a connection.
 // Pages are fetched fresh when online and fall back to the saved copy when offline.
 // Built files have a unique name per version, so a saved copy of them never goes stale.
-const CACHE = 'taskeex-v1'
+const CACHE = 'taskeex-v2'
 
 self.addEventListener('install', () => self.skipWaiting())
 
