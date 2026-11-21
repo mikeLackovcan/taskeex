@@ -42,4 +42,4 @@ Every push to `main` is tested, built and published to GitHub Pages by `.github/
 
 ### Vercel
 
-`vercel.json` sets up the build. Import the repository once at <https://vercel.com/new>; after that every push to `main` is published, and every other branch gets its own preview address. Add the Vercel address (for example `taskeex.vercel.app`) to Firebase's authorized domains so Google sign-in works there.
+`vercel.json` sets up the build. Import the repository once at <https://vercel.com/new>; after that every push to `main` is published, and every other branch gets its own preview address. The app's Vercel address is <https://taskeex.vercel.app>. Add `taskeex.vercel.app` to Firebase's authorized domains so Google sign-in works there.

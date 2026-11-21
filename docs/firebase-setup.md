@@ -12,7 +12,7 @@ free plan ("Spark"); no card is needed.
 2. In the project, open **Build → Authentication → Get started → Sign-in method**, choose
    **Google**, switch it on, pick a support email and save.
 3. Still in Authentication, open **Settings → Authorized domains** and add the address the app
-   is served from, without `https://`. For GitHub Pages that is `mikelackovcan.github.io`; on Vercel it is the project's address, such as `taskeex.vercel.app`.
+   is served from, without `https://`. For GitHub Pages that is `mikelackovcan.github.io`; on Vercel it is `taskeex.vercel.app`.
 4. Open **Build → Firestore Database → Create database**. Choose a location near you and
    **production mode**.
 5. In Firestore, open the **Rules** tab, replace the text with the contents of
